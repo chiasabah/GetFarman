@@ -1,0 +1,9 @@
+# Local tooling and its database (machine-specific paths)
+.claude/
+.context/
+
+# Built from the fermande folder
+fermande.zip
+
+__pycache__/
+*.pyc
