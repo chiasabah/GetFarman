@@ -1,12 +1,12 @@
-<h1 align="center">Fermande</h1>
+<h1 align="center">Farman</h1>
 
 <p align="center">
-  <img src="assets/icon.svg" alt="Fermande icon" width="128" height="128">
+  <img src="assets/icon.svg" alt="Farman icon" width="128" height="128">
 </p>
 
-<p align="center">Fermande is a prompt coach for Claude Code. It shows the shorter, more precise prompt that you could have sent.</p>
+<p align="center">Farman is a prompt coach for Claude Code. It shows the shorter, more precise prompt that you could have sent.</p>
 
-Fermande keeps a log of the prompts that you send in Claude Code and of what Claude answered. In the background, Haiku or Sonnet reviews them. For each prompt you get the standard term for the thing that you described and the shortest prompt that would have given the same result. Nothing is written into your chat.
+Farman keeps a log of the prompts that you send in Claude Code and of what Claude answered. In the background, Haiku or Sonnet reviews them. For each prompt you get the standard term for the thing that you described and the shortest prompt that would have given the same result. Nothing is written into your chat.
 
 ![The page as it opens. The sidebar is on the left and the prompts are on the right](docs/screenshots/messages.png)
 
@@ -25,7 +25,7 @@ The reviewer marks each prompt as "Could be better" or "Already precise". For a 
 
 ## The page
 
-Run `fermande open` in a terminal or type `/fermande` in a Claude Code session. The page opens in your browser. It answers on `127.0.0.1` only, which means that only your own computer can reach it.
+Run `npx farman` in a terminal or type `/farman` in a Claude Code session. The page opens in your browser. It answers on `127.0.0.1` only, which means that only your own computer can reach it.
 
 The page opens on Messages with every session in the list, as in the screenshot above. The newest prompt is at the top.
 
@@ -134,21 +134,22 @@ The last button in the top bar switches between the light theme and the dark the
 
 ## Install
 
-Fermande needs Python 3.8 or newer and Claude Code. It works on Windows, macOS and Linux.
-
-On Windows, open the `fermande` folder and run `install.cmd`.
-
-On macOS and Linux, run this in the `fermande` folder.
+Farman needs Node 22.13 or newer and Claude Code. It works on Windows, macOS and Linux. It uses no packages, only what Node ships with.
 
 ```sh
-./install.sh
+npx farman
 ```
 
-Then check the install and open the page.
+The first run sets Farman up and opens the page in your browser. Later runs just open the page. `yarn dlx farman` does the same.
+
+Until Farman is on the npm registry, run it from a copy of this repository with `node bin/farman.js`.
+
+The setup copies the app to `~/.farman`, adds three hooks to Claude Code's settings and adds the `/farman` command. It saves a backup of your settings first and leaves your other hooks alone.
+
+Then check the install.
 
 ```sh
-fermande doctor --call
-fermande open
+npx farman doctor --call
 ```
 
 ## Commands
@@ -157,17 +158,17 @@ Type these in a Claude Code session. The hook answers them, so they never reach 
 
 | Command | What happens |
 |---|---|
-| `/fermande` | Opens the page |
-| `/fermande now` | Reviews the new prompts that wait in this session |
-| `/fermande status` | Shows the mode, the counts and the last review |
-| `/fermande on`, `hand` or `off` | Sets the mode |
+| `/farman` | Opens the page |
+| `/farman now` | Reviews the new prompts that wait in this session |
+| `/farman status` | Shows the mode, the counts and the last review |
+| `/farman on`, `hand` or `off` | Sets the mode |
 
-In a terminal, `fermande model sonnet` changes the reviewer and `fermande remove` uninstalls Fermande.
+In a terminal, `npx farman model sonnet` changes the reviewer and `npx farman remove` uninstalls Farman.
 
 ## Privacy
 
-Your prompts and the ends of Claude's replies are stored as plain text in `~/.fermande/fermande.db`. They leave your computer only when a review sends them to Claude through your own `claude` login. `fermande forget --all` empties the log.
+Your prompts and the ends of Claude's replies are stored as plain text in `~/.farman/farman.db`. They leave your computer only when a review sends them to Claude through your own `claude` login. `npx farman forget --all` empties the log.
 
 ## Full guide
 
-The full guide is in [fermande/README.md](fermande/README.md). It covers every command, the files that Fermande keeps and what to do when something fails.
+The full guide is in [docs/guide.md](docs/guide.md). It covers every command, the files that Farman keeps and what to do when something fails.

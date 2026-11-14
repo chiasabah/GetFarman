@@ -1,0 +1,31 @@
+{
+  "name": "farman",
+  "version": "0.5.0",
+  "description": "A prompt coach for Claude Code. It logs your prompts and shows the shorter, more precise prompt that you could have sent.",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "prompt",
+    "coach",
+    "hooks"
+  ],
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chiasabah/Farman.git"
+  },
+  "bin": {
+    "farman": "bin/farman.js"
+  },
+  "files": [
+    "bin/farman.js",
+    "ui/index.html",
+    "skill/SKILL.md"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "test": "node test/smoke.js"
+  }
+}

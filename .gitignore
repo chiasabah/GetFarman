@@ -2,8 +2,5 @@
 .claude/
 .context/
 
-# Built from the fermande folder
-fermande.zip
-
-__pycache__/
-*.pyc
+node_modules/
+*.tgz
