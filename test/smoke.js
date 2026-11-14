@@ -12,7 +12,8 @@ const BIN = path.resolve(__dirname, '..', 'bin', 'farman.js');
 const box = fs.mkdtempSync(path.join(os.tmpdir(), 'farman-test-'));
 const home = path.join(box, '.farman');
 const claude = path.join(box, '.claude');
-const env = Object.assign({}, process.env, { FARMAN_HOME: home, CLAUDE_CONFIG_DIR: claude, USERPROFILE: box, HOME: box });
+// FARMAN_NO_PATH keeps setup and remove away from your real PATH.
+const env = Object.assign({}, process.env, { FARMAN_HOME: home, CLAUDE_CONFIG_DIR: claude, USERPROFILE: box, HOME: box, FARMAN_NO_PATH: '1' });
 delete env.FARMAN_REVIEWER;
 const PORT = 4791;
 
@@ -171,6 +172,39 @@ const ok = name => console.log('  ok   ' + (++step) + '. ' + name);
   assert.strictEqual(s.hooks.Stop[0].hooks[0].command, 'echo other');
   assert.ok(fs.existsSync(path.join(home, 'farman.db')) && !fs.existsSync(path.join(home, 'app')));
   ok('remove takes the hooks out and keeps the log');
+
+  // 7. the farman command on the PATH: a shell's start-up file
+  const rc = path.join(box, '.zshrc');
+  fs.writeFileSync(rc, 'alias ll="ls -l"\n');
+  assert.strictEqual(F.profileLine('/home/sam/.farman/bin', true, rc), 'added');
+  assert.strictEqual(F.profileLine('/home/sam/.farman/bin', true, rc), 'present');
+  assert.ok(fs.readFileSync(rc, 'utf8').endsWith('\n# Added by Farman\nexport PATH="/home/sam/.farman/bin:$PATH"\n'));
+  assert.strictEqual(F.profileLine('/home/sam/.farman/bin', false, rc), 'removed');
+  assert.strictEqual(fs.readFileSync(rc, 'utf8'), 'alias ll="ls -l"\n');
+  assert.strictEqual(F.profileLine('/home/sam/.farman/bin', false, rc), 'absent');
+  ok('a shell start-up file gains two lines and loses them again');
+
+  // 8. the same on Windows, against a scratch registry key and never the real PATH
+  if (process.platform === 'win32') {
+    const key = 'Software\\FarmanSmokeTest';
+    const first = '%USERPROFILE%\\one;C:\\Two\\';
+    const mine = 'C:\\Farman Test\\bin';
+    try {
+      cp.spawnSync('reg', ['add', 'HKCU\\' + key, '/v', 'Path', '/t', 'REG_EXPAND_SZ', '/d', first, '/f']);
+      assert.strictEqual(F.winUserPath('add', mine, key), 'added');
+      assert.strictEqual(F.winUserPath('add', mine, key), 'present');
+      assert.strictEqual(F.winUserPath('add', 'c:\\two', key), 'present');
+      assert.strictEqual(F.winUserPath('read', mine, key), 'value=' + first + ';' + mine);
+      assert.strictEqual(F.winUserPath('remove', mine, key), 'removed');
+      assert.strictEqual(F.winUserPath('read', mine, key), 'value=' + first.replace(/;$/, ''));
+      assert.strictEqual(F.winUserPath('remove', mine, key), 'absent');
+      const kind = cp.spawnSync('reg', ['query', 'HKCU\\' + key, '/v', 'Path'], { encoding: 'utf8' }).stdout;
+      assert.ok(kind.includes('REG_EXPAND_SZ'), kind);
+    } finally {
+      cp.spawnSync('reg', ['delete', 'HKCU\\' + key, '/f']);
+    }
+    ok('a Windows PATH value gains one folder and loses it, with the rest kept as it was');
+  }
 
   fs.rmSync(box, { recursive: true, force: true });
   console.log('all ' + step + ' checks passed');

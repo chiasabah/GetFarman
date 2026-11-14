@@ -14,7 +14,7 @@ const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
 const SELF = __filename;
-let VERSION = '0.5.0';
+let VERSION = '0.5.1';
 try { VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version || VERSION; } catch (e) { /* keep the default */ }
 const SCHEMA_VERSION = 3;
 
@@ -1840,13 +1840,90 @@ function onPath(folder) {
   return (process.env.PATH || '').split(path.delimiter).filter(Boolean).some(e => normcase(path.normalize(e)) === want);
 }
 
+// Windows keeps each user's PATH in the registry. This script adds or removes one folder there.
+// It works on the unexpanded text, keeps the value's kind, and tells open programs that PATH changed.
+const WIN_PATH_SCRIPT = `
+$d = $env:FARMAN_BIN
+$k = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($env:FARMAN_KEY)
+$old = [string]$k.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+$kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
+if ($k.GetValueNames() -contains 'Path') { $kind = $k.GetValueKind('Path') }
+$norm = { param($p) [Environment]::ExpandEnvironmentVariables($p).TrimEnd('\\').ToLowerInvariant() }
+$parts = @($old -split ';' | Where-Object { $_ -ne '' })
+$has = @($parts | Where-Object { (& $norm $_) -eq (& $norm $d) }).Count -gt 0
+$did = 'present'
+if ($env:FARMAN_OP -eq 'add') {
+  if (-not $has) { $k.SetValue('Path', (($parts + $d) -join ';'), $kind); $did = 'added' }
+} elseif ($env:FARMAN_OP -eq 'remove') {
+  if ($has) { $k.SetValue('Path', (@($parts | Where-Object { (& $norm $_) -ne (& $norm $d) }) -join ';'), $kind); $did = 'removed' } else { $did = 'absent' }
+} else {
+  $did = 'value=' + $old
+}
+$k.Close()
+if (($did -eq 'added' -or $did -eq 'removed') -and $env:FARMAN_KEY -eq 'Environment') { [Environment]::SetEnvironmentVariable('FARMAN_PATH_REFRESH', $null, 'User') }
+Write-Output $did
+`;
+
+/** Add a folder to the user's PATH on Windows, or take it out. Returns added, present, removed or absent. */
+function winUserPath(op, dir, key) {
+  const out = cp.execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand',
+    Buffer.from(WIN_PATH_SCRIPT, 'utf16le').toString('base64')], {
+    encoding: 'utf8', windowsHide: true, timeout: 20000, stdio: ['ignore', 'pipe', 'ignore'],
+    env: Object.assign({}, process.env, { FARMAN_BIN: dir, FARMAN_OP: op, FARMAN_KEY: key || 'Environment' }),
+  });
+  return out.trim().split(/\r?\n/).pop().trim();
+}
+
+const PROFILE_MARK = '# Added by Farman';
+
+/** The start-up files of the shells that people use, the one for the current shell first. */
+function profileFiles() {
+  const all = { zsh: path.join(USER, '.zshrc'), bash: path.join(USER, process.platform === 'darwin' ? '.bash_profile' : '.bashrc'),
+    fish: path.join(USER, '.config', 'fish', 'conf.d', 'farman.fish'), sh: path.join(USER, '.profile') };
+  const mine = all[path.basename(process.env.SHELL || '')] || all.sh;
+  return [mine].concat(Object.values(all).filter(f => f !== mine));
+}
+
+/** Add two lines to a shell's start-up file that put a folder on the PATH, or take them out again. */
+function profileLine(dir, add, file) {
+  let text = '';
+  try { text = fs.readFileSync(file, 'utf8'); } catch (e) { /* no such file yet */ }
+  const has = text.includes(PROFILE_MARK);
+  if (add) {
+    if (has) return 'present';
+    const line = file.endsWith('.fish') ? 'fish_add_path "' + dir + '"' : 'export PATH="' + dir + ':$PATH"';
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.appendFileSync(file, (text && !text.endsWith('\n') ? '\n' : '') + (text ? '\n' : '') + PROFILE_MARK + '\n' + line + '\n');
+    return 'added';
+  }
+  if (!has) return 'absent';
+  const lines = text.split('\n');
+  const i = lines.indexOf(PROFILE_MARK);
+  lines.splice(i, 2);
+  if (i > 0 && lines[i - 1] === '' && (i >= lines.length || lines[i] === '')) lines.splice(i - 1, 1);
+  if (lines.join('\n').trim()) fs.writeFileSync(file, lines.join('\n'));
+  else fs.rmSync(file, { force: true });
+  return 'removed';
+}
+
+/** Put the folder that holds the farman command on the user's PATH, for every new terminal. */
+function registerCommand(dir) {
+  return IS_WIN ? winUserPath('add', dir) : profileLine(dir, true, profileFiles()[0]);
+}
+
+function unregisterCommand(dir) {
+  if (IS_WIN) return winUserPath('remove', dir);
+  return profileFiles().map(f => profileLine(dir, false, f)).includes('removed') ? 'removed' : 'absent';
+}
+
 function installedVersion() {
   try { return JSON.parse(fs.readFileSync(path.join(HOME, 'app', 'package.json'), 'utf8')).version || ''; } catch (e) { return ''; }
 }
 
 /** Install or update: copy the app to the data folder, register the hooks, add the command, read history. */
-function cmdSetup(history) {
+function cmdSetup(history, noPath) {
   sqlite();
+  noPath = noPath || Boolean(process.env.FARMAN_NO_PATH);
   const dstApp = path.join(HOME, 'app');
   for (const d of [path.join(dstApp, 'bin'), path.join(dstApp, 'ui'), path.join(dstApp, 'skill'), path.join(HOME, 'bin'), WORK]) {
     fs.mkdirSync(d, { recursive: true });
@@ -1894,8 +1971,9 @@ function cmdSetup(history) {
     return 1;
   }
 
+  // Register the farman command: a folder that is on the PATH already gets it, otherwise our own folder joins the PATH.
   const localBin = path.join(USER, '.local', 'bin');
-  let short = '';
+  let short = '', fresh = false;
   try {
     if (IS_WIN) {
       if (fs.existsSync(localBin) && onPath(localBin)) {
@@ -1909,8 +1987,13 @@ function cmdSetup(history) {
       fs.symlinkSync(launcher, link);
       short = onPath(localBin) ? 'farman' : '';
     }
+    if (!short && onPath(bind)) short = 'farman';
+    if (!short && !noPath) {
+      fresh = registerCommand(bind) === 'added';
+      short = 'farman';
+    }
   } catch (e) {
-    log('could not add the farman command to ' + localBin + ': ' + e.message);
+    log('could not register the farman command: ' + e.message);
   }
   const cmd = short || (launcher.includes(' ') ? '"' + launcher + '"' : launcher);
 
@@ -1936,6 +2019,7 @@ Next steps:
     console.log('\nNote: the claude command was not found on your PATH. Reviews need it.\n' +
       'Set it with: ' + cmd + ' config claude <full path to claude>');
   }
+  if (fresh) console.log('\nThe farman command is now on your PATH (' + bind + '). Open a new terminal to use it.');
   if (!short) console.log('\nTip: to type just "farman", add this folder to your PATH: ' + bind);
   return 0;
 }
@@ -1962,6 +2046,9 @@ async function cmdRemove(purge) {
       const st = fs.lstatSync(file);
       if (st.isSymbolicLink() || (st.isFile() && fs.readFileSync(file, 'utf8').slice(0, 2000).includes('farman.js'))) fs.rmSync(file, { force: true });
     } catch (e) { /* not there */ }
+  }
+  if (!process.env.FARMAN_NO_PATH) {
+    try { unregisterCommand(path.join(HOME, 'bin')); } catch (e) { log('could not take the farman command off the PATH: ' + e.message); }
   }
   const ours = fs.existsSync(DB) || fs.existsSync(CONFIG) || fs.existsSync(path.join(HOME, 'app'));
   if (purge && ours) {
@@ -2042,7 +2129,7 @@ const USAGE = `Farman ${VERSION}. A sidecar prompt coach for Claude Code.
   farman forget OPTION     --all | --session ID | --older-than DAYS
   farman doctor [--call]   check the installation; --call also tries one review
   farman stop              stop the page's server
-  farman setup             install or update: the hooks, the /farman command and the app
+  farman setup             install or update: the hooks, the /farman command, the app and the farman command on your PATH
   farman remove [--purge]  uninstall; --purge also deletes the log
   farman config KEY VALUE  set a config.json key, for example: config claude /path
 `;
@@ -2062,13 +2149,13 @@ async function main(argv) {
     const settled = path.resolve(SELF) === path.resolve(INSTALLED);
     const ready = fs.existsSync(INSTALLED) && installedVersion() === VERSION && hooksRegistered(path.join(claudeDir(), 'settings.json')).length === 3;
     if (!settled && !ready) {
-      const rc = cmdSetup(!rest.includes('--no-history'));
+      const rc = cmdSetup(!rest.includes('--no-history'), rest.includes('--no-path'));
       if (rc) return rc;
       console.log('');
     }
     return cmdOpen(!rest.includes('--no-browser'));
   }
-  if (cmd === 'setup') return cmdSetup(!rest.includes('--no-history'));
+  if (cmd === 'setup') return cmdSetup(!rest.includes('--no-history'), rest.includes('--no-path'));
   if (cmd === 'remove') return cmdRemove(rest.includes('--purge'));
   if (cmd === 'review-run') {
     for (const rid of (rest[0] || '').split(',')) {
@@ -2174,5 +2261,5 @@ if (require.main === module) {
     });
 } else {
   module.exports = { VERSION, HOME, connect, applyReview, words, firstLine, ownText, sessionTimes, bump, cleanConfig, hookCommand, editSettings,
-    hooksRegistered, parseTranscript, termUsed, shortenPath };
+    hooksRegistered, parseTranscript, termUsed, shortenPath, winUserPath, profileLine };
 }

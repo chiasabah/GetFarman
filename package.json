@@ -1,6 +1,6 @@
 {
   "name": "farman",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "A prompt coach for Claude Code. It logs your prompts and shows the shorter, more precise prompt that you could have sent.",
   "keywords": [
     "claude",

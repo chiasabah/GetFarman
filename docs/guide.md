@@ -19,7 +19,7 @@ Farman needs Node 22.13 or newer and Claude Code. It works on Windows, macOS and
 npx farman
 ```
 
-The first run sets Farman up and opens the log in your browser. Later runs just open the log. `yarn dlx farman` does the same.
+The first run sets Farman up and opens the log in your browser. `yarn dlx farman` does the same. The setup also puts the `farman` command on your PATH, so from then on you type `farman` in any new terminal, without npx.
 
 Until Farman is on the npm registry, run it from a copy of this repository with `node bin/farman.js`.
 
@@ -29,7 +29,7 @@ The setup:
 2. creates `~/.farman/farman.db` and `config.json`;
 3. adds three hooks to `~/.claude/settings.json`, after saving a backup beside it, and leaves your other hooks alone;
 4. adds the `/farman` command (`~/.claude/skills/farman`);
-5. makes the `farman` command (`~/.farman/bin`, and `~/.local/bin` when that folder is on your PATH);
+5. puts the `farman` command on your PATH. It uses `~/.local/bin` when that folder is on your PATH already. Otherwise it adds `~/.farman/bin` to your PATH, in your user settings on Windows and in your shell's start-up file elsewhere (skip with `--no-path`);
 6. reads your existing conversations (skip with `npx farman --no-history`).
 
 Then check it:
@@ -39,9 +39,7 @@ farman doctor --call   # checks the install and tries one real review
 farman open            # opens the log in your browser
 ```
 
-If `farman` is not found, use `npx farman` with the same words after it, for example `npx farman doctor --call`. Or add `~/.farman/bin` to your PATH. Inside Claude Code, `/farman` always works.
-
-To keep the command for good, install it once with `npm install --global farman` or `yarn global add farman`.
+Open a new terminal after the first run, so that it sees the new PATH. If `farman` is still not found, run `npx farman setup` again. Inside Claude Code, `/farman` always works.
 
 On Windows, `~` in this guide means your user folder, for example `C:\Users\You`. If you run Claude Code inside WSL, run `npx farman` there instead.
 

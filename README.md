@@ -25,7 +25,7 @@ The reviewer marks each prompt as "Could be better" or "Already precise". For a 
 
 ## The page
 
-Run `npx farman` in a terminal or type `/farman` in a Claude Code session. The page opens in your browser. It answers on `127.0.0.1` only, which means that only your own computer can reach it.
+Run `farman open` in a terminal or type `/farman` in a Claude Code session. The page opens in your browser. It answers on `127.0.0.1` only, which means that only your own computer can reach it.
 
 The page opens on Messages with every session in the list, as in the screenshot above. The newest prompt is at the top.
 
@@ -140,7 +140,9 @@ Farman needs Node 22.13 or newer and Claude Code. It works on Windows, macOS and
 npx farman
 ```
 
-The first run sets Farman up and opens the page in your browser. Later runs just open the page. `yarn dlx farman` does the same.
+The first run sets Farman up and opens the page in your browser. `yarn dlx farman` does the same.
+
+The setup also puts the `farman` command on your PATH. From then on you type `farman` in any new terminal, without npx.
 
 Until Farman is on the npm registry, run it from a copy of this repository with `node bin/farman.js`.
 
@@ -149,7 +151,7 @@ The setup copies the app to `~/.farman`, adds three hooks to Claude Code's setti
 Then check the install.
 
 ```sh
-npx farman doctor --call
+farman doctor --call
 ```
 
 ## Commands
@@ -163,11 +165,11 @@ Type these in a Claude Code session. The hook answers them, so they never reach 
 | `/farman status` | Shows the mode, the counts and the last review |
 | `/farman on`, `hand` or `off` | Sets the mode |
 
-In a terminal, `npx farman model sonnet` changes the reviewer and `npx farman remove` uninstalls Farman.
+In a terminal, `farman open` opens the page, `farman model sonnet` changes the reviewer and `farman remove` uninstalls Farman.
 
 ## Privacy
 
-Your prompts and the ends of Claude's replies are stored as plain text in `~/.farman/farman.db`. They leave your computer only when a review sends them to Claude through your own `claude` login. `npx farman forget --all` empties the log.
+Your prompts and the ends of Claude's replies are stored as plain text in `~/.farman/farman.db`. They leave your computer only when a review sends them to Claude through your own `claude` login. `farman forget --all` empties the log.
 
 ## Full guide
 
