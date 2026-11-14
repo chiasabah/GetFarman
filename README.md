@@ -177,6 +177,10 @@ In a terminal, `farman open` opens the page, `farman model sonnet` changes the r
 
 Your prompts and the ends of Claude's replies are stored as plain text in `~/.farman/farman.db`. They leave your computer only when a review sends them to Claude through your own `claude` login. `farman forget --all` empties the log.
 
+## Licence
+
+Farman is under the [PolyForm Noncommercial License 1.0.0](LICENSE). You may use it, change it and share it for any noncommercial purpose. Every copy that you pass on must carry the licence and the copyright notice, so the credit stays with it. You may not use Farman commercially.
+
 ## Full guide
 
 The full guide is in [docs/guide.md](docs/guide.md). It covers every command, the files that Farman keeps and what to do when something fails.
