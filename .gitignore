@@ -4,3 +4,6 @@
 
 node_modules/
 *.tgz
+
+# npm login tokens must never reach git
+.npmrc
