@@ -12,7 +12,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/chiasabah/getfarman.git"
+    "url": "git+https://github.com/chiasabah/GetFarman.git"
   },
   "bin": {
     "getfarman": "bin/getfarman.js"
