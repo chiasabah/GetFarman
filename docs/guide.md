@@ -23,8 +23,6 @@ npx farman
 
 The first run sets Farman up and opens the log in your browser. `yarn dlx farman` does the same. The setup also puts the `farman` command on your PATH, so from then on you type `farman` in any new terminal, without npx.
 
-Until Farman is on the npm registry, run it from a copy of this repository with `node bin/farman.js`.
-
 The setup:
 
 1. copies the app to `~/.farman/app`, so that the hooks keep working after npx clears its cache;

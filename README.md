@@ -4,6 +4,13 @@
   <img src="assets/icon.svg" alt="Farman icon" width="128" height="128">
 </p>
 
+<p align="center">
+  <a href="https://www.npmjs.com/package/farman"><img src="https://img.shields.io/npm/v/farman?label=npm" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/farman"><img src="https://img.shields.io/npm/dt/farman?label=downloads" alt="downloads"></a>
+  <a href="https://packagephobia.com/result?p=farman"><img src="https://packagephobia.com/badge?p=farman" alt="install size"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/npm/l/farman?label=license" alt="license"></a>
+</p>
+
 <p align="center">Farman is a sidecar prompt coach for Claude Code. It keeps a glossary and teaches you the exact term for what you mean.</p>
 
 <hr>
@@ -17,6 +24,25 @@ Farman can also read the conversations that Claude Code already keeps on your co
 ![The page as it opens. The sidebar is on the left and the prompts are on the right](docs/screenshots/messages.png)
 
 The screenshots on this page show sample data.
+
+## Contents
+
+- [How it works](#how-it-works)
+- [The page](#the-page)
+  - [Messages](#messages)
+  - [Reviews](#reviews)
+  - [Glossary](#glossary)
+  - [Filters](#filters)
+  - [The View choices](#the-view-choices)
+  - [The folded sidebar](#the-folded-sidebar)
+  - [Pick the prompts to review](#pick-the-prompts-to-review)
+  - [Settings](#settings)
+  - [Dark theme](#dark-theme)
+- [Install](#install)
+- [Commands](#commands)
+- [Privacy](#privacy)
+- [Licence](#licence)
+- [Full guide](#full-guide)
 
 ## How it works
 
@@ -150,8 +176,6 @@ The first run sets Farman up and opens the page in your browser. `yarn dlx farma
 
 The setup also puts the `farman` command on your PATH. From then on you type `farman` in any new terminal, without npx.
 
-Until Farman is on the npm registry, run it from a copy of this repository with `node bin/farman.js`.
-
 The setup copies the app to `~/.farman`, adds three hooks to Claude Code's settings and adds the `/farman` command. It saves a backup of your settings first and leaves your other hooks alone.
 
 Then check the install.
@@ -179,7 +203,7 @@ Your prompts and the ends of Claude's replies are stored as plain text in `~/.fa
 
 ## Licence
 
-Farman is under the [PolyForm Noncommercial License 1.0.0](LICENSE). You may use it, change it and share it for any noncommercial purpose. Every copy that you pass on must carry the licence and the copyright notice, so the credit stays with it. You may not use Farman commercially.
+Farman is under the [MIT License](LICENSE). You may use it, change it and share it, also commercially. Keep the copyright notice and the licence text with every copy.
 
 ## Full guide
 
