@@ -102,7 +102,7 @@ fermande remove [--purge]  uninstall; --purge also deletes the log
 ### On the page
 
 - **Top bar:** what the list shows (everything, one project, or one session with its project in front), the prompt search, the three views, "Review now", Settings and the theme. The chip next to "Live" shows the coach's mode; click it to change the mode.
-- **Search prompts and terms** (top bar, shortcut `/`) narrows the prompts, and in the Cards view the terms. It looks in what you said, the better prompt, Claude's reply and the terms.
+- **Search prompts and terms** (top bar, shortcut `/`) narrows the prompts, and in the Glossary view the terms. It looks in what you said, the better prompt, Claude's reply and the terms.
 - **Sidebar, projects first:** each project is the folder that Claude Code ran in. Click a project to see only its prompts and to open its sessions. The one with the latest prompt comes first.
 - **The round button on the sidebar's edge** folds the sidebar to a narrow rail: two letters for each project and the three filter signs. It does not hide the sidebar. The same button opens it again.
 - **Search sessions and projects** (top of the sidebar) narrows the sidebar. Type a project name and only that project and its sessions stay. It never changes the list of prompts.
@@ -110,7 +110,7 @@ fermande remove [--purge]  uninstall; --purge also deletes the log
 - **Filters** (bottom of the sidebar, always in reach): a period (All, Today, 7 days, 30 days, or your own From and To) and switches for "Could be better", "Already precise" and "Not reviewed yet".
 - **Messages:** your prompt on the left, the better prompt on the right. The lay phrase has a dashed underline and the term a solid one, in the same colour. Under each pair is the term's definition. Claude's reply and the changed files sit underneath.
 - **Reviews:** the same prompts as a table: you said, meant, better, words. The arrow under a prompt's number opens a long prompt in full and shows how the coach knew.
-- **Cards:** one row for each term: the term, its definition, what you said instead, the project, when it was last used and how often. Click a column name to sort by it, and again to turn the order round. Click a term to see the prompts behind it. The cards follow the project or session that you chose, the period and the search.
+- **Glossary:** one row for each term: the term, its definition, what you said instead, the project, when it was last used and how often. Click a column name to sort by it, and again to turn the order round. Click a term to see the prompts behind it. The glossary follows the project or session that you chose, the period and the search.
 - **"found, not used":** the reviewer is told to use every term it names inside the better prompt. After each review, Fermande compares the term with the better prompt as plain text, with no model, and marks a pair whose term is missing.
 - **System reminders:** an app can put its own text in front of what you typed, for example a note about other sessions. Fermande folds that text into a yellow block above your prompt, leaves it out of the word count, and does not send it to the reviewer. A reminder in the middle of your text stays where it is.
 - **Review now:** reviews everything that waits in the current view, the latest 300 at most.

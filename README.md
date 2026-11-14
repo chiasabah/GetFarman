@@ -27,17 +27,19 @@ The reviewer marks each prompt as "Could be better" or "Already precise". For a 
 
 Run `fermande open` in a terminal or type `/fermande` in a Claude Code session. The page opens in your browser. It answers on `127.0.0.1` only, which means that only your own computer can reach it.
 
-### The default view
-
 The page opens on Messages with every session in the list, as in the screenshot above. The newest prompt is at the top.
 
 The sidebar on the left lists your projects and sessions, the terms to keep and the filters. The top bar holds the search box, the three views, "Review now", Settings and the theme button.
 
 A prompt that waits for a review says "Not reviewed yet". "Review now" sends every waiting prompt in the list to the reviewer.
 
+Each part below has two pictures. The first shows the whole page with a red box round the part. The second shows that part close up.
+
 ### Messages
 
-![One session in the Messages view. One prompt is opened to show its details](docs/screenshots/session.png)
+![One session in the Messages view. A red box marks one prompt that is opened to show its details](docs/screenshots/session.png)
+
+![The marked prompt close up](docs/screenshots/session-crop.png)
 
 Your prompt is on the left and the better prompt is on the right. A lay phrase has a dashed underline. Its term has a solid underline in the same colour. The definition of the term is under the pair. Claude's reply and the changed files are below.
 
@@ -47,45 +49,69 @@ Click a project or a session in the sidebar to see only its prompts. "Terms to k
 
 ### Reviews
 
-![The Reviews view, a table of the same prompts](docs/screenshots/reviews.png)
+![The Reviews view. A red box marks the column names and the first two prompts](docs/screenshots/reviews.png)
+
+![The column names and the first two prompts close up](docs/screenshots/reviews-crop.png)
 
 Reviews shows the same prompts as a table. The columns are You said, Meant, Better and Words. Words gives the length of your prompt and the length of the better one.
 
-### Cards
+### Glossary
 
-![The Cards view, one row for each term](docs/screenshots/cards.png)
+![The Glossary view. A red box marks the column names and the first four terms](docs/screenshots/glossary.png)
 
-Cards has one row for each term. A row gives the term, its definition, what you said instead, the project, when you last used it and how often. Click a column name to sort by it. Click a term to see the prompts that it came from.
+![The column names and the first four terms close up](docs/screenshots/glossary-crop.png)
+
+Glossary has one row for each term. A row gives the term, its definition, what you said instead, the project, when you last used it and how often. Click a column name to sort by it. Click a term to see the prompts that it came from.
 
 ### Filters
 
-![The filters with a custom period open and one switch turned off](docs/screenshots/filters.png)
+![The whole page. A red box marks the filters at the bottom of the sidebar](docs/screenshots/filters.png)
+
+<p align="center">
+  <img src="docs/screenshots/filters-crop.png" alt="The filters close up. A custom period is open and one switch is turned off" width="269">
+</p>
 
 The filters are at the bottom of the sidebar. Choose a period (All, Today, 7 days or 30 days) or choose Custom and set your own From and To.
 
 Three switches show or hide the prompts that could be better, the ones that are already precise and the ones that are not reviewed yet. A fourth switch hides Claude's replies.
 
-### The sidebar
+### The View choices
+
+![The whole page. A red box marks the View choices at the top of the sidebar](docs/screenshots/view.png)
 
 <p align="center">
-  <img src="docs/screenshots/view-menu.png" alt="The View choices at the top of the sidebar" width="270">
+  <img src="docs/screenshots/view-crop.png" alt="The View choices close up" width="254">
 </p>
 
 "View" opens the choices for the sidebar. Arrange the entries by project or as one list. Order them by latest prompt, start, name or size. Show the prompts of a session oldest first or newest first. Choose whether an entry shows its date, its prompt count and its state bar.
 
-The button at the top edge of the sidebar folds it to a narrow rail. The rail keeps two letters for each project and the three filter signs.
+### The folded sidebar
 
-![The sidebar folded to a narrow rail](docs/screenshots/rail.png)
+![The whole page with the sidebar folded. A red box marks the narrow rail](docs/screenshots/rail.png)
+
+<p align="center">
+  <img src="docs/screenshots/rail-crop.png" alt="The narrow rail close up" width="54">
+</p>
+
+The button at the top edge of the sidebar folds it to a narrow rail. The rail keeps two letters for each project and the three filter signs. The same button opens the sidebar again.
 
 ### Pick the prompts to review
 
-![Three prompts selected. The Review selected button is in the top right](docs/screenshots/selection.png)
+![Three prompts selected. A red box marks the Review selected button in the top right](docs/screenshots/selection.png)
+
+<p align="center">
+  <img src="docs/screenshots/selection-crop.png" alt="The count of selected prompts, the Review selected button and Clear close up" width="319">
+</p>
 
 Click a prompt's number to select it. "Review selected" then reviews only the prompts that you picked. A prompt that was reviewed before is reviewed again in place.
 
 ### Settings
 
-![The Settings panel](docs/screenshots/settings.png)
+![The whole page. A red box marks the Settings panel on the right](docs/screenshots/settings.png)
+
+<p align="center">
+  <img src="docs/screenshots/settings-crop.png" alt="The Settings panel close up" width="408">
+</p>
 
 | Setting | What it does |
 |---|---|
@@ -98,9 +124,13 @@ Click a prompt's number to select it. "Review selected" then reviews only the pr
 
 ### Dark theme
 
-![The page in the dark theme](docs/screenshots/dark.png)
+![The page in the dark theme. A red box marks the buttons at the right end of the top bar](docs/screenshots/dark.png)
 
-The button at the right of the top bar switches between the light theme and the dark theme.
+<p align="center">
+  <img src="docs/screenshots/dark-crop.png" alt="The Review now button, the Settings button and the theme button close up" width="253">
+</p>
+
+The last button in the top bar switches between the light theme and the dark theme.
 
 ## Install
 

@@ -529,7 +529,7 @@ const ARROW='<svg class="arrow" aria-hidden="true"><use href="#glyph-arrow"/></s
 const CHEVRON='<svg class="chevron" aria-hidden="true"><use href="#glyph-chevron"/></svg>';
 const DIVIDER='<svg class="group-divider" aria-hidden="true"><rect width="100%" height="100%" fill="url(#squiggle)"/></svg>';
 const KEY='fermande.page.v3', PAGE=50, OVER=700;
-const VIEWS=[['messages','Messages'],['reviews','Reviews'],['cards','Cards']];
+const VIEWS=[['messages','Messages'],['reviews','Reviews'],['cards','Glossary']];
 const CARD_COLS=[['term','Term'],['gloss','Definition'],['said','You said'],['project','Project'],['last_at','Last used'],['times','Times']];
 const NOTE_KIND={'system-reminder':'System reminder','task-notification':'Task notification'};
 const UNUSED='<span class="pair-flag" title="The reviewer named this term but did not use it in the better prompt. A plain text comparison found this, not a model.">found, not used</span>';
@@ -625,7 +625,7 @@ async function loadPage(p,g,force){
   }catch(e){ if(g===gen){ online=false; renderChrome(); } }
   finally{ if(inflight.get(p)===pr) inflight.delete(p); }
 }
-async function loadCards(g){      // the cards view: one row for each term
+async function loadCards(g){      // the Glossary view: one row for each term
   try{ const d=await api('/api/cards?'+qs({sort:state.cardSort.key,dir:state.cardSort.dir,group:'',desc:'',states:'',term:''})); if(g!==gen) return;
     cards=d; online=true; }
   catch(e){ if(g!==gen) return; cards={total:0,items:[],error:e.message}; }
@@ -966,8 +966,8 @@ function renderCards(){
   const box=$('#cards');
   if(!online){ box.innerHTML=OFFLINE(); return; }
   if(!cards){ box.innerHTML='<div class="empty-state"><p class="muted-text">Loading…</p></div>'; return; }
-  if(cards.error){ box.innerHTML='<div class="empty-state"><p><b>The cards could not be loaded.</b> '+esc(cards.error)+'</p></div>'; return; }
-  if(!cards.items.length){ box.innerHTML='<div class="empty-state"><p><b>'+(state.q?'No term matches “'+esc(state.q)+'”.':'No terms yet.')+'</b> '+(state.q?'Clear the search to see them all.':'A card appears for each term that a review finds. Review some prompts first.')+'</p></div>'; return; }
+  if(cards.error){ box.innerHTML='<div class="empty-state"><p><b>The glossary could not be loaded.</b> '+esc(cards.error)+'</p></div>'; return; }
+  if(!cards.items.length){ box.innerHTML='<div class="empty-state"><p><b>'+(state.q?'No term matches “'+esc(state.q)+'”.':'No terms yet.')+'</b> '+(state.q?'Clear the search to see them all.':'The glossary gets a row for each term that a review finds. Review some prompts first.')+'</p></div>'; return; }
   box.innerHTML=cards.items.map(c=>{ const key=c.term.toLowerCase(), miss=c.times-c.used, where=c.projects||[];
     return '<div class="card-row">'+
       '<div class="card-cell card-term"><button class="term-button" data-act="term-prompts" data-t="'+esc(key)+'" data-fid="card-'+esc(key)+'" title="Show the prompts that led to this term"><span class="term">'+hi(c.term)+'</span></button>'+
