@@ -2,7 +2,9 @@
 
 A sidecar prompt coach for Claude Code. It keeps a log of what you said and what Claude answered, and in the background it works out what you could have said: the standard term for the thing you described, and the shortest prompt that would have had the same result.
 
-Nothing is ever written into your chat. Farman runs beside the session, not in it.
+Its goal is to help you, the operator, write prompts with more specific terms. So it is a prompt buddy that coaches your prompts, corrects your terminology and keeps a glossary of the terms that you learnt.
+
+Nothing is ever written into your chat. Farman runs beside the session, not in it. Reading the conversations that Claude Code already keeps does not change that. Farman only reads them.
 
 ## What it does
 

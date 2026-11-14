@@ -4,9 +4,15 @@
   <img src="assets/icon.svg" alt="Farman icon" width="128" height="128">
 </p>
 
-<p align="center">Farman is a prompt coach for Claude Code. It shows the shorter, more precise prompt that you could have sent.</p>
+<p align="center">Farman is a sidecar prompt coach for Claude Code. It keeps a glossary and teaches you the exact term for what you mean.</p>
 
-Farman keeps a log of the prompts that you send in Claude Code and of what Claude answered. In the background, Haiku or Sonnet reviews them. For each prompt you get the standard term for the thing that you described and the shortest prompt that would have given the same result. Nothing is written into your chat.
+<hr>
+
+Farman is a prompt buddy. Its goal is to help you, the operator, write prompts with more specific terms. It does three jobs. It coaches your prompts, it corrects your terminology and it keeps a glossary of the terms that you learnt.
+
+Farman is a sidecar, which means that it runs beside Claude Code and never inside your session. It keeps a log of the prompts that you send and of what Claude answered. In the background, Haiku or Sonnet reviews them. For each prompt you get the standard term for the thing that you described and the shortest prompt that would have given the same result. Nothing is written into your chat.
+
+Farman can also read the conversations that Claude Code already keeps on your computer, so the log covers work from before you installed it. It only reads them. It still runs beside Claude Code and changes nothing in it.
 
 ![The page as it opens. The sidebar is on the left and the prompts are on the right](docs/screenshots/messages.png)
 
