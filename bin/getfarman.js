@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/* Farman: a sidecar prompt coach for Claude Code.
+/* GetFarman: a sidecar prompt coach for Claude Code.
 
    It logs each prompt, the end of Claude's reply and the files that changed to a
    SQLite file, and it reviews prompts in the background with Haiku or Sonnet.
@@ -19,15 +19,15 @@ try { VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf
 const SCHEMA_VERSION = 3;
 
 const USER = os.homedir();
-const HOME = process.env.FARMAN_HOME || path.join(USER, '.farman');
-const DB = path.join(HOME, 'farman.db');
+const HOME = process.env.GETFARMAN_HOME || path.join(USER, '.getfarman');
+const DB = path.join(HOME, 'getfarman.db');
 const CONFIG = path.join(HOME, 'config.json');
-const LOGFILE = path.join(HOME, 'farman.log');
+const LOGFILE = path.join(HOME, 'getfarman.log');
 const TOKENFILE = path.join(HOME, 'token');
 const SERVERFILE = path.join(HOME, 'server.json');
 const WORK = path.join(HOME, 'work');
 const PROMPTFILE = path.join(HOME, 'reviewer_prompt.txt');   // your own reviewer instructions, when you edit them
-const INSTALLED = path.join(HOME, 'app', 'bin', 'farman.js');
+const INSTALLED = path.join(HOME, 'app', 'bin', 'getfarman.js');
 const IS_WIN = process.platform === 'win32';
 
 const DEFAULTS = {
@@ -161,7 +161,7 @@ Rules:
 - Do not praise.
 `;
 
-// Farman always adds this after the guide, so that the page can read the answer whatever the guide says.
+// GetFarman always adds this after the guide, so that the page can read the answer whatever the guide says.
 const REVIEWER_FORMAT = `Also give "title": a name of 2 to 5 words for what the session is about, in sentence case.
 
 Return JSON only, with no text before or after it, in this shape:
@@ -282,7 +282,7 @@ function sqlite() {
   try {
     DatabaseSync = require('node:sqlite').DatabaseSync;
   } catch (e) {
-    throw new Error('Farman needs Node 22.13 or newer. This is Node ' + process.versions.node + '.');
+    throw new Error('GetFarman needs Node 22.13 or newer. This is Node ' + process.versions.node + '.');
   } finally {
     process.emitWarning = emit;
   }
@@ -404,7 +404,7 @@ function spawnSelf(args) {
   try {
     const child = cp.spawn(process.execPath, [stableSelf()].concat(args), {
       detached: true, stdio: ['ignore', lf, lf], cwd: HOME, windowsHide: true,
-      env: Object.assign({}, process.env, { FARMAN_REVIEWER: '1' }),
+      env: Object.assign({}, process.env, { GETFARMAN_REVIEWER: '1' }),
     });
     child.on('error', e => log('could not start a background process: ' + e.message));
     child.unref();
@@ -577,7 +577,7 @@ const reviewerPrompt = () => reviewerGuide()[0] + '\n\n' + REVIEWER_FORMAT.trim(
 function callClaude(cfg, model, system, user) {
   let exe = cfg.claude || '';
   if (!(exe && fs.existsSync(exe))) exe = which('claude');
-  if (!exe) throw new ReviewError('The claude command was not found. Run: farman config claude /path/to/claude', true);
+  if (!exe) throw new ReviewError('The claude command was not found. Run: getfarman config claude /path/to/claude', true);
   fs.mkdirSync(WORK, { recursive: true });
   const sysFile = path.join(WORK, 'reviewer-instructions.txt');
   const setFile = path.join(WORK, 'reviewer-settings.json');
@@ -592,7 +592,7 @@ function callClaude(cfg, model, system, user) {
   let con = connect();
   let start;
   try { start = Math.min(tiers.length - 1, Math.max(0, parseInt(metaGet(con, 'tier', 0), 10) || 0)); } finally { con.close(); }
-  const env = Object.assign({}, process.env, { FARMAN_REVIEWER: '1' });
+  const env = Object.assign({}, process.env, { GETFARMAN_REVIEWER: '1' });
   const quote = a => (/^[\w./:\\~=-]+$/.test(a) ? a : '"' + a + '"');
   let last = null;
   for (let ti = start; ti < tiers.length; ti++) {
@@ -812,7 +812,7 @@ function statusLine(cfg, sid) {
   return s;
 }
 
-/** /farman typed in a session. Handled here and blocked, so it never reaches Claude. */
+/** /getfarman typed in a session. Handled here and blocked, so it never reaches Claude. */
 function slash(arg, ev, cfg) {
   const w = arg.split(/\s+/).filter(Boolean);
   const cmd = w.length ? w[0].toLowerCase() : 'open';
@@ -849,13 +849,13 @@ function slash(arg, ev, cfg) {
     } else if (cmd === 'status') {
       out = statusLine(cfg, sid);
     } else {
-      out = 'use /farman open, now, status, import, on, hand, off or every N.';
+      out = 'use /getfarman open, now, status, import, on, hand, off or every N.';
     }
   } catch (e) {
     log('slash command failed: ' + e.message);
     out = 'that did not work: ' + e.message;
   }
-  try { fs.writeSync(2, 'Farman: ' + out + '\n'); } catch (e) { /* nowhere to say it */ }
+  try { fs.writeSync(2, 'GetFarman: ' + out + '\n'); } catch (e) { /* nowhere to say it */ }
   return 2;
 }
 
@@ -878,7 +878,7 @@ function readStdin() {
 }
 
 function cmdHook() {
-  if (process.env.FARMAN_REVIEWER) return 0;
+  if (process.env.GETFARMAN_REVIEWER) return 0;
   let ev;
   try {
     const raw = readStdin();
@@ -897,8 +897,8 @@ function cmdHook() {
     const prompt = ev.prompt;
     if (typeof prompt !== 'string') return 0;
     const head = prompt.trim();
-    if (head.slice(0, 7).toLowerCase() === '/farman' && (head.length === 7 || /\s/.test(head[7]))) {
-      return slash(head.slice(7).trim(), ev, cfg);
+    if (head.slice(0, 10).toLowerCase() === '/getfarman' && (head.length === 10 || /\s/.test(head[10]))) {
+      return slash(head.slice(10).trim(), ev, cfg);
     }
     if (cfg.mode === 'off' || !head || '/!'.includes(head[0])) return 0;
     const con = connect();
@@ -1502,7 +1502,7 @@ function ping(port) {
       let text = '';
       res.setEncoding('utf8');
       res.on('data', d => { text += d; });
-      res.on('end', () => { try { resolve(Boolean(JSON.parse(text).farman)); } catch (e) { resolve(false); } });
+      res.on('end', () => { try { resolve(Boolean(JSON.parse(text).getfarman)); } catch (e) { resolve(false); } });
     });
     req.on('timeout', () => { req.destroy(); resolve(false); });
     req.on('error', () => resolve(false));
@@ -1537,7 +1537,7 @@ async function cmdServe(port, wait) {
     const data = Buffer.isBuffer(body) ? body : Buffer.from(JSON.stringify(body), 'utf8');
     res.writeHead(code, Object.assign({
       'Content-Type': ctype || 'application/json; charset=utf-8', 'Content-Length': data.length,
-      'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', Server: 'Farman/' + VERSION,
+      'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', Server: 'GetFarman/' + VERSION,
     }, extra || {}));
     res.end(data);
   };
@@ -1549,7 +1549,7 @@ async function cmdServe(port, wait) {
       try { host = new URL(origin).hostname; } catch (e) { /* not a URL */ }
       if (!['127.0.0.1', 'localhost'].includes(host)) return false;
     }
-    const got = Buffer.from(String(req.headers['x-farman-token'] || ''));
+    const got = Buffer.from(String(req.headers['x-getfarman-token'] || ''));
     const want = Buffer.from(token);
     return got.length === want.length && crypto.timingSafeEqual(got, want);
   };
@@ -1571,16 +1571,16 @@ async function cmdServe(port, wait) {
     if (method === 'GET' && (u.pathname === '/' || u.pathname === '/index.html')) {
       let html;
       try {
-        html = fs.readFileSync(path.join(ROOT, 'ui', 'index.html'), 'utf8').split('__FARMAN_TOKEN__').join(token);
+        html = fs.readFileSync(path.join(ROOT, 'ui', 'index.html'), 'utf8').split('__GETFARMAN_TOKEN__').join(token);
       } catch (e) {
         return send(res, 500, Buffer.from('The page file is missing: ' + e.message), 'text/plain; charset=utf-8');
       }
       return send(res, 200, Buffer.from(html, 'utf8'), 'text/html; charset=utf-8',
         { 'Content-Security-Policy': csp, 'Referrer-Policy': 'no-referrer' });
     }
-    if (method === 'GET' && u.pathname === '/api/ping') return send(res, 200, { farman: VERSION });
+    if (method === 'GET' && u.pathname === '/api/ping') return send(res, 200, { getfarman: VERSION });
     if (!u.pathname.startsWith('/api/')) return send(res, 404, { error: 'Not found.' });
-    if (!authed(req)) return send(res, 403, { error: 'Open the page from the farman command so that it carries its key.' });
+    if (!authed(req)) return send(res, 403, { error: 'Open the page from the getfarman command so that it carries its key.' });
     let body = {};
     if (method === 'POST') {
       if (!String(req.headers['content-type'] || '').includes('application/json')) return send(res, 415, { error: 'JSON only.' });
@@ -1591,7 +1591,7 @@ async function cmdServe(port, wait) {
     try {
       const route = method + ' ' + u.pathname;
       if (route === 'GET /api/stamp') {
-        let build = VERSION;      // the page reloads itself when Farman or the page file was updated
+        let build = VERSION;      // the page reloads itself when GetFarman or the page file was updated
         try { build = VERSION + ':' + Math.floor(fs.statSync(path.join(ROOT, 'ui', 'index.html')).mtimeMs / 1000); } catch (e) { /* version only */ }
         return send(res, 200, { stamp: metaGet(con, 'stamp', '0'), build, running: con.val("SELECT COUNT(*) FROM reviews WHERE status='running'") });
       }
@@ -1632,7 +1632,7 @@ async function cmdServe(port, wait) {
       return send(res, 404, { error: 'Not found.' });
     } catch (e) {
       log('server error on ' + u.pathname + ': ' + e.message);
-      return send(res, 500, { error: 'Farman hit an error: ' + e.message });
+      return send(res, 500, { error: 'GetFarman hit an error: ' + e.message });
     } finally {
       con.close();
     }
@@ -1641,7 +1641,7 @@ async function cmdServe(port, wait) {
   const server = http.createServer((req, res) => {
     handle(req, res).catch(e => {
       log('server error: ' + e.message);
-      try { send(res, 500, { error: 'Farman hit an error: ' + e.message }); } catch (e2) { /* the reply had started */ }
+      try { send(res, 500, { error: 'GetFarman hit an error: ' + e.message }); } catch (e2) { /* the reply had started */ }
     });
   });
   const listen = p => new Promise(resolve => {
@@ -1673,10 +1673,10 @@ async function cmdServe(port, wait) {
       log("the page's server stopped after " + cfg.idle_minutes + ' idle minutes');
       bye();
     }
-    try {        // Farman was updated under a running server: start the new one on the same port
+    try {        // GetFarman was updated under a running server: start the new one on the same port
       const m = fs.statSync(SELF).mtimeMs;
       if (m !== made && Date.now() - m > 3000 && cp.spawnSync(process.execPath, ['--check', SELF], { windowsHide: true }).status === 0) {
-        log("Farman was updated, so the page's server restarts");
+        log("GetFarman was updated, so the page's server restarts");
         spawnSelf(['serve', '--port', String(at), '--wait']);
         process.exit(0);
       }
@@ -1685,7 +1685,7 @@ async function cmdServe(port, wait) {
   process.on('SIGINT', bye);
   process.on('SIGTERM', bye);
   log('serving the page at http://127.0.0.1:' + at + '/');
-  console.log('Farman is at http://127.0.0.1:' + at + '/  (Ctrl+C stops it)');
+  console.log('GetFarman is at http://127.0.0.1:' + at + '/  (Ctrl+C stops it)');
   await new Promise(() => {});
   return 0;
 }
@@ -1773,10 +1773,10 @@ function hookCommand(exe, script, windows) {
 
 function isOurs(h) {
   const c = isObj(h) ? String(h.command || '') : '';
-  return c.includes('farman.js') && c.trimEnd().endsWith(' hook');
+  return c.includes('getfarman.js') && c.trimEnd().endsWith(' hook');
 }
 
-/** Add or remove Farman's three hooks in a Claude Code settings file. Other entries are kept.
+/** Add or remove GetFarman's three hooks in a Claude Code settings file. Other entries are kept.
 
     Returns null when nothing changed, the backup's path when one was made, and '' otherwise. */
 function editSettings(file, add, script) {
@@ -1785,7 +1785,7 @@ function editSettings(file, add, script) {
   if (existed) {
     const text = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
     if (text.trim()) {
-      try { data = JSON.parse(text); } catch (e) { throw new Error(file + ' is not valid JSON (' + e.message + '). Fix it and run farman setup again.'); }
+      try { data = JSON.parse(text); } catch (e) { throw new Error(file + ' is not valid JSON (' + e.message + '). Fix it and run getfarman setup again.'); }
     }
     if (!isObj(data)) throw new Error(file + ' does not hold a JSON object.');
   }
@@ -1817,12 +1817,12 @@ function editSettings(file, add, script) {
   if (JSON.stringify(data) === before) return null;
   let backup = null;
   if (existed) {
-    backup = file + '.farman-backup-' + stamp(false);
+    backup = file + '.getfarman-backup-' + stamp(false);
     while (fs.existsSync(backup)) backup += '-1';
     fs.copyFileSync(file, backup);
   }
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = file + '.farman-tmp';
+  const tmp = file + '.getfarman-tmp';
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n');
   fs.renameSync(tmp, file);
   return backup || '';
@@ -1843,8 +1843,8 @@ function onPath(folder) {
 // Windows keeps each user's PATH in the registry. This script adds or removes one folder there.
 // It works on the unexpanded text, keeps the value's kind, and tells open programs that PATH changed.
 const WIN_PATH_SCRIPT = `
-$d = $env:FARMAN_BIN
-$k = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($env:FARMAN_KEY)
+$d = $env:GETFARMAN_BIN
+$k = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($env:GETFARMAN_KEY)
 $old = [string]$k.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
 $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
 if ($k.GetValueNames() -contains 'Path') { $kind = $k.GetValueKind('Path') }
@@ -1852,15 +1852,15 @@ $norm = { param($p) [Environment]::ExpandEnvironmentVariables($p).TrimEnd('\\').
 $parts = @($old -split ';' | Where-Object { $_ -ne '' })
 $has = @($parts | Where-Object { (& $norm $_) -eq (& $norm $d) }).Count -gt 0
 $did = 'present'
-if ($env:FARMAN_OP -eq 'add') {
+if ($env:GETFARMAN_OP -eq 'add') {
   if (-not $has) { $k.SetValue('Path', (($parts + $d) -join ';'), $kind); $did = 'added' }
-} elseif ($env:FARMAN_OP -eq 'remove') {
+} elseif ($env:GETFARMAN_OP -eq 'remove') {
   if ($has) { $k.SetValue('Path', (@($parts | Where-Object { (& $norm $_) -ne (& $norm $d) }) -join ';'), $kind); $did = 'removed' } else { $did = 'absent' }
 } else {
   $did = 'value=' + $old
 }
 $k.Close()
-if (($did -eq 'added' -or $did -eq 'removed') -and $env:FARMAN_KEY -eq 'Environment') { [Environment]::SetEnvironmentVariable('FARMAN_PATH_REFRESH', $null, 'User') }
+if (($did -eq 'added' -or $did -eq 'removed') -and $env:GETFARMAN_KEY -eq 'Environment') { [Environment]::SetEnvironmentVariable('GETFARMAN_PATH_REFRESH', $null, 'User') }
 Write-Output $did
 `;
 
@@ -1869,17 +1869,17 @@ function winUserPath(op, dir, key) {
   const out = cp.execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand',
     Buffer.from(WIN_PATH_SCRIPT, 'utf16le').toString('base64')], {
     encoding: 'utf8', windowsHide: true, timeout: 20000, stdio: ['ignore', 'pipe', 'ignore'],
-    env: Object.assign({}, process.env, { FARMAN_BIN: dir, FARMAN_OP: op, FARMAN_KEY: key || 'Environment' }),
+    env: Object.assign({}, process.env, { GETFARMAN_BIN: dir, GETFARMAN_OP: op, GETFARMAN_KEY: key || 'Environment' }),
   });
   return out.trim().split(/\r?\n/).pop().trim();
 }
 
-const PROFILE_MARK = '# Added by Farman';
+const PROFILE_MARK = '# Added by GetFarman';
 
 /** The start-up files of the shells that people use, the one for the current shell first. */
 function profileFiles() {
   const all = { zsh: path.join(USER, '.zshrc'), bash: path.join(USER, process.platform === 'darwin' ? '.bash_profile' : '.bashrc'),
-    fish: path.join(USER, '.config', 'fish', 'conf.d', 'farman.fish'), sh: path.join(USER, '.profile') };
+    fish: path.join(USER, '.config', 'fish', 'conf.d', 'getfarman.fish'), sh: path.join(USER, '.profile') };
   const mine = all[path.basename(process.env.SHELL || '')] || all.sh;
   return [mine].concat(Object.values(all).filter(f => f !== mine));
 }
@@ -1906,7 +1906,7 @@ function profileLine(dir, add, file) {
   return 'removed';
 }
 
-/** Put the folder that holds the farman command on the user's PATH, for every new terminal. */
+/** Put the folder that holds the getfarman command on the user's PATH, for every new terminal. */
 function registerCommand(dir) {
   return IS_WIN ? winUserPath('add', dir) : profileLine(dir, true, profileFiles()[0]);
 }
@@ -1923,13 +1923,13 @@ function installedVersion() {
 /** Install or update: copy the app to the data folder, register the hooks, add the command, read history. */
 function cmdSetup(history, noPath) {
   sqlite();
-  noPath = noPath || Boolean(process.env.FARMAN_NO_PATH);
+  noPath = noPath || Boolean(process.env.GETFARMAN_NO_PATH);
   const dstApp = path.join(HOME, 'app');
   for (const d of [path.join(dstApp, 'bin'), path.join(dstApp, 'ui'), path.join(dstApp, 'skill'), path.join(HOME, 'bin'), WORK]) {
     fs.mkdirSync(d, { recursive: true });
   }
   try { fs.chmodSync(HOME, 0o700); } catch (e) { /* not every file system has modes */ }
-  for (const rel of [path.join('bin', 'farman.js'), path.join('ui', 'index.html'), path.join('skill', 'SKILL.md'), 'package.json']) {
+  for (const rel of [path.join('bin', 'getfarman.js'), path.join('ui', 'index.html'), path.join('skill', 'SKILL.md'), 'package.json']) {
     const from = path.resolve(ROOT, rel), to = path.resolve(dstApp, rel);
     if (!fs.existsSync(from)) {
       console.log('The package is incomplete: ' + from + ' is missing.');
@@ -1942,10 +1942,10 @@ function cmdSetup(history, noPath) {
   const bind = path.join(HOME, 'bin');
   let launcher;
   if (IS_WIN) {
-    launcher = path.join(bind, 'farman.cmd');
+    launcher = path.join(bind, 'getfarman.cmd');
     fs.writeFileSync(launcher, '@"' + node.replace(/%/g, '%%') + '" "' + script.replace(/%/g, '%%') + '" %* & exit /b\r\n');
   } else {
-    launcher = path.join(bind, 'farman');
+    launcher = path.join(bind, 'getfarman');
     fs.writeFileSync(launcher, '#!/bin/sh\nexec "' + node + '" "' + script + '" "$@"\n');
     fs.chmodSync(launcher, 0o755);
     fs.chmodSync(script, 0o755);
@@ -1960,7 +1960,7 @@ function cmdSetup(history, noPath) {
     connect().close();
     getToken();
     const backup = editSettings(settings, true, script);
-    const skillDir = path.join(claudeDir(), 'skills', 'farman');
+    const skillDir = path.join(claudeDir(), 'skills', 'getfarman');
     fs.mkdirSync(skillDir, { recursive: true });
     fs.copyFileSync(path.join(dstApp, 'skill', 'SKILL.md'), path.join(skillDir, 'SKILL.md'));
     console.log(backup === null ? 'Hooks in ' + settings + ' were already in place.'
@@ -1971,29 +1971,29 @@ function cmdSetup(history, noPath) {
     return 1;
   }
 
-  // Register the farman command: a folder that is on the PATH already gets it, otherwise our own folder joins the PATH.
+  // Register the getfarman command: a folder that is on the PATH already gets it, otherwise our own folder joins the PATH.
   const localBin = path.join(USER, '.local', 'bin');
   let short = '', fresh = false;
   try {
     if (IS_WIN) {
       if (fs.existsSync(localBin) && onPath(localBin)) {
-        fs.copyFileSync(launcher, path.join(localBin, 'farman.cmd'));
-        short = 'farman';
+        fs.copyFileSync(launcher, path.join(localBin, 'getfarman.cmd'));
+        short = 'getfarman';
       }
     } else {
       fs.mkdirSync(localBin, { recursive: true });
-      const link = path.join(localBin, 'farman');
+      const link = path.join(localBin, 'getfarman');
       fs.rmSync(link, { force: true });
       fs.symlinkSync(launcher, link);
-      short = onPath(localBin) ? 'farman' : '';
+      short = onPath(localBin) ? 'getfarman' : '';
     }
-    if (!short && onPath(bind)) short = 'farman';
+    if (!short && onPath(bind)) short = 'getfarman';
     if (!short && !noPath) {
       fresh = registerCommand(bind) === 'added';
-      short = 'farman';
+      short = 'getfarman';
     }
   } catch (e) {
-    log('could not register the farman command: ' + e.message);
+    log('could not register the getfarman command: ' + e.message);
   }
   const cmd = short || (launcher.includes(' ') ? '"' + launcher + '"' : launcher);
 
@@ -2002,12 +2002,12 @@ function cmdSetup(history, noPath) {
     cmdImport(null, false);
   }
   console.log(`
-Farman is installed.
+GetFarman is installed.
 
-  Log and settings   ${HOME}  (farman.db, config.json)
+  Log and settings   ${HOME}  (getfarman.db, config.json)
   Node               ${node}
   Hooks              registered in ${settings}
-  In a session       /farman        opens the log; /farman now reviews what waits
+  In a session       /getfarman        opens the log; /getfarman now reviews what waits
   In a terminal      ${cmd} open
 
 Next steps:
@@ -2019,8 +2019,8 @@ Next steps:
     console.log('\nNote: the claude command was not found on your PATH. Reviews need it.\n' +
       'Set it with: ' + cmd + ' config claude <full path to claude>');
   }
-  if (fresh) console.log('\nThe farman command is now on your PATH (' + bind + '). Open a new terminal to use it.');
-  if (!short) console.log('\nTip: to type just "farman", add this folder to your PATH: ' + bind);
+  if (fresh) console.log('\nThe getfarman command is now on your PATH (' + bind + '). Open a new terminal to use it.');
+  if (!short) console.log('\nTip: to type just "getfarman", add this folder to your PATH: ' + bind);
   return 0;
 }
 
@@ -2038,26 +2038,26 @@ async function cmdRemove(purge) {
   } catch (e) {
     console.log(e.message);
   }
-  fs.rmSync(path.join(claudeDir(), 'skills', 'farman'), { recursive: true, force: true });
+  fs.rmSync(path.join(claudeDir(), 'skills', 'getfarman'), { recursive: true, force: true });
   const localBin = path.join(USER, '.local', 'bin');
-  for (const name of ['farman', 'farman.cmd']) {
+  for (const name of ['getfarman', 'getfarman.cmd']) {
     const file = path.join(localBin, name);
     try {
       const st = fs.lstatSync(file);
-      if (st.isSymbolicLink() || (st.isFile() && fs.readFileSync(file, 'utf8').slice(0, 2000).includes('farman.js'))) fs.rmSync(file, { force: true });
+      if (st.isSymbolicLink() || (st.isFile() && fs.readFileSync(file, 'utf8').slice(0, 2000).includes('getfarman.js'))) fs.rmSync(file, { force: true });
     } catch (e) { /* not there */ }
   }
-  if (!process.env.FARMAN_NO_PATH) {
-    try { unregisterCommand(path.join(HOME, 'bin')); } catch (e) { log('could not take the farman command off the PATH: ' + e.message); }
+  if (!process.env.GETFARMAN_NO_PATH) {
+    try { unregisterCommand(path.join(HOME, 'bin')); } catch (e) { log('could not take the getfarman command off the PATH: ' + e.message); }
   }
   const ours = fs.existsSync(DB) || fs.existsSync(CONFIG) || fs.existsSync(path.join(HOME, 'app'));
   if (purge && ours) {
     fs.rmSync(HOME, { recursive: true, force: true });
-    console.log('Farman is removed, with its log.');
+    console.log('GetFarman is removed, with its log.');
   } else {
     for (const name of ['app', 'bin', 'work']) fs.rmSync(path.join(HOME, name), { recursive: true, force: true });
     fs.rmSync(SERVERFILE, { force: true });
-    console.log('Farman is removed. Your log stays in ' + HOME + '. Delete that folder to remove it too.');
+    console.log('GetFarman is removed. Your log stays in ' + HOME + '. Delete that folder to remove it too.');
   }
   return 0;
 }
@@ -2069,7 +2069,7 @@ async function cmdDoctor(call) {
     ok = ok && Boolean(good);
     console.log((good ? '  ok   ' : '  FIX  ') + text);
   };
-  console.log('Farman ' + VERSION);
+  console.log('GetFarman ' + VERSION);
   let lite = '';
   try {
     sqlite();
@@ -2077,7 +2077,7 @@ async function cmdDoctor(call) {
     lite = mem.val('SELECT sqlite_version()');
     mem.close();
   } catch (e) { /* reported below */ }
-  line(Boolean(lite), 'Node ' + process.versions.node + ' at ' + process.execPath + (lite ? ', SQLite ' + lite : ', which is too old. Farman needs Node 22.13 or newer'));
+  line(Boolean(lite), 'Node ' + process.versions.node + ' at ' + process.execPath + (lite ? ', SQLite ' + lite : ', which is too old. GetFarman needs Node 22.13 or newer'));
   try {
     const con = connect();
     const n = con.val('SELECT COUNT(*) FROM turns');
@@ -2089,13 +2089,13 @@ async function cmdDoctor(call) {
   }
   const settings = path.join(claudeDir(), 'settings.json');
   const found = hooksRegistered(settings);
-  line(found.length === 3, 'Hooks in ' + settings + ': ' + (found.join(', ') || 'none (run: farman setup)'));
-  const skill = path.join(claudeDir(), 'skills', 'farman', 'SKILL.md');
-  line(fs.existsSync(skill), '/farman command: ' + (fs.existsSync(skill) ? skill : 'not installed'));
+  line(found.length === 3, 'Hooks in ' + settings + ': ' + (found.join(', ') || 'none (run: getfarman setup)'));
+  const skill = path.join(claudeDir(), 'skills', 'getfarman', 'SKILL.md');
+  line(fs.existsSync(skill), '/getfarman command: ' + (fs.existsSync(skill) ? skill : 'not installed'));
   const exe = cfg.claude && fs.existsSync(cfg.claude) ? cfg.claude : which('claude');
-  line(Boolean(exe), 'claude command: ' + (exe || 'not found. Run: farman config claude /path/to/claude'));
+  line(Boolean(exe), 'claude command: ' + (exe || 'not found. Run: getfarman config claude /path/to/claude'));
   const info = await serverInfo();
-  console.log('  ' + (info ? '--   The page is at http://127.0.0.1:' + info.port + '/' : '--   The page is not open. Run: farman open'));
+  console.log('  ' + (info ? '--   The page is at http://127.0.0.1:' + info.port + '/' : '--   The page is not open. Run: getfarman open'));
   try { console.log('  --   Mode: ' + statusLine(cfg)); } catch (e) { /* the database line said why */ }
   if (call && exe) {
     console.log('  ..   Asking ' + cfg.model + ' to review one sample prompt');
@@ -2115,23 +2115,23 @@ async function cmdDoctor(call) {
 
 // ---------------------------------------------------------------- command line
 
-const USAGE = `Farman ${VERSION}. A sidecar prompt coach for Claude Code.
+const USAGE = `GetFarman ${VERSION}. A sidecar prompt coach for Claude Code.
 
-  farman                   set Farman up when needed, then open the log in your browser
-  farman open              open the log in your browser
-  farman now               review the new prompts that wait in the most recent session
-  farman import [--days N] read the conversations Claude Code already keeps into the log
-  farman status            mode, counts and the last review
-  farman mode MODE         automatic | by_hand | off
-  farman every N           automatic: review after every N prompts (3 to 50)
-  farman model NAME        haiku | sonnet | any name that claude --model takes
-  farman glossary [ID]     the terms taught, for one session id or for all
-  farman forget OPTION     --all | --session ID | --older-than DAYS
-  farman doctor [--call]   check the installation; --call also tries one review
-  farman stop              stop the page's server
-  farman setup             install or update: the hooks, the /farman command, the app and the farman command on your PATH
-  farman remove [--purge]  uninstall; --purge also deletes the log
-  farman config KEY VALUE  set a config.json key, for example: config claude /path
+  getfarman                   set GetFarman up when needed, then open the log in your browser
+  getfarman open              open the log in your browser
+  getfarman now               review the new prompts that wait in the most recent session
+  getfarman import [--days N] read the conversations Claude Code already keeps into the log
+  getfarman status            mode, counts and the last review
+  getfarman mode MODE         automatic | by_hand | off
+  getfarman every N           automatic: review after every N prompts (3 to 50)
+  getfarman model NAME        haiku | sonnet | any name that claude --model takes
+  getfarman glossary [ID]     the terms taught, for one session id or for all
+  getfarman forget OPTION     --all | --session ID | --older-than DAYS
+  getfarman doctor [--call]   check the installation; --call also tries one review
+  getfarman stop              stop the page's server
+  getfarman setup             install or update: the hooks, the /getfarman command, the app and the getfarman command on your PATH
+  getfarman remove [--purge]  uninstall; --purge also deletes the log
+  getfarman config KEY VALUE  set a config.json key, for example: config claude /path
 `;
 
 const after = (rest, flag) => (rest.includes(flag) && rest.indexOf(flag) + 1 < rest.length ? rest[rest.indexOf(flag) + 1] : '');
@@ -2145,7 +2145,7 @@ async function main(argv) {
   if (['version', '--version', '-v'].includes(cmd)) { console.log(VERSION); return 0; }
   if (['help', '--help', '-h'].includes(cmd)) { console.log(USAGE); return 0; }
   if (cmd === 'start') {
-    // npx farman: make sure the installed copy, the hooks and the /farman command are in place, then open the page.
+    // npx getfarman: make sure the installed copy, the hooks and the /getfarman command are in place, then open the page.
     const settled = path.resolve(SELF) === path.resolve(INSTALLED);
     const ready = fs.existsSync(INSTALLED) && installedVersion() === VERSION && hooksRegistered(path.join(claudeDir(), 'settings.json')).length === 3;
     if (!settled && !ready) {
@@ -2171,11 +2171,11 @@ async function main(argv) {
   if (cmd === 'stop') return cmdStop();
   if (cmd === 'doctor') return cmdDoctor(rest.includes('--call'));
   let cfg = loadConfig();
-  if (cmd === 'status') { console.log('Farman is ' + statusLine(cfg)); return 0; }
+  if (cmd === 'status') { console.log('GetFarman is ' + statusLine(cfg)); return 0; }
   if (cmd === 'mode' && rest.length && MODES.concat(['on', 'hand']).includes(rest[0].replace(/-/g, '_'))) {
     cfg.mode = { on: 'automatic', hand: 'by_hand' }[rest[0]] || rest[0].replace(/-/g, '_');
     saveConfig(cfg);
-    console.log('Farman is ' + statusLine(cfg));
+    console.log('GetFarman is ' + statusLine(cfg));
     return 0;
   }
   if (cmd === 'every' && rest.length && /^\d+$/.test(rest[0])) {
@@ -2256,7 +2256,7 @@ if (require.main === module) {
     code => { process.exitCode = code || 0; },
     e => {
       if (process.argv[2] === 'hook') { log('hook error: ' + e.message); process.exitCode = 0; return; }
-      console.error('Farman: ' + e.message);
+      console.error('GetFarman: ' + e.message);
       process.exitCode = 1;
     });
 } else {

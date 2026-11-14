@@ -1,25 +1,25 @@
-<h1 align="center">Farman</h1>
+<h1 align="center">GetFarman</h1>
 
 <p align="center">
-  <img src="assets/icon.svg" alt="Farman icon" width="128" height="128">
+  <img src="assets/icon.svg" alt="GetFarman icon" width="128" height="128">
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/farman"><img src="https://img.shields.io/npm/v/farman?label=npm" alt="npm version"></a>
-  <a href="https://www.npmjs.com/package/farman"><img src="https://img.shields.io/npm/dt/farman?label=downloads" alt="downloads"></a>
-  <a href="https://packagephobia.com/result?p=farman"><img src="https://packagephobia.com/badge?p=farman" alt="install size"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/npm/l/farman?label=license" alt="license"></a>
+  <a href="https://www.npmjs.com/package/getfarman"><img src="https://img.shields.io/npm/v/getfarman?label=npm" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/getfarman"><img src="https://img.shields.io/npm/dt/getfarman?label=downloads" alt="downloads"></a>
+  <a href="https://packagephobia.com/result?p=getfarman"><img src="https://packagephobia.com/badge?p=getfarman" alt="install size"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/npm/l/getfarman?label=license" alt="license"></a>
 </p>
 
-<p align="center">Farman is a sidecar prompt coach for Claude Code. It keeps a glossary and teaches you the exact term for what you mean.</p>
+<p align="center">GetFarman is a sidecar prompt coach for Claude Code. It keeps a glossary and teaches you the exact terms to use.</p>
 
 <hr>
 
-Farman is a prompt buddy. Its goal is to help you, the operator, write prompts with more specific terms. It does three jobs. It coaches your prompts, it corrects your terminology and it keeps a glossary of the terms that you learnt.
+GetFarman is a prompt buddy. Its goal is to help you, the operator, write prompts with more specific terms. It does three jobs. It coaches your prompts, it corrects your terminology and it keeps a glossary of the terms that you learnt.
 
-Farman is a sidecar, which means that it runs beside Claude Code and never inside your session. It keeps a log of the prompts that you send and of what Claude answered. In the background, Haiku or Sonnet reviews them. For each prompt you get the standard term for the thing that you described and the shortest prompt that would have given the same result. Nothing is written into your chat.
+GetFarman is a sidecar, which means that it runs beside Claude Code and never inside your session. It keeps a log of the prompts that you send and of what Claude answered. In the background, Haiku or Sonnet reviews them. For each prompt you get the standard term for the thing that you described and the shortest prompt that would have given the same result. Nothing is written into your chat.
 
-Farman can also read the conversations that Claude Code already keeps on your computer, so the log covers work from before you installed it. It only reads them. It still runs beside Claude Code and changes nothing in it.
+GetFarman can also read the conversations that Claude Code already keeps on your computer, so the log covers work from before you installed it. It only reads them. It still runs beside Claude Code and changes nothing in it.
 
 ![The page as it opens. The sidebar is on the left and the prompts are on the right](docs/screenshots/messages.png)
 
@@ -57,7 +57,7 @@ The reviewer marks each prompt as "Could be better" or "Already precise". For a 
 
 ## The page
 
-Run `farman open` in a terminal or type `/farman` in a Claude Code session. The page opens in your browser. It answers on `127.0.0.1` only, which means that only your own computer can reach it.
+Run `getfarman open` in a terminal or type `/getfarman` in a Claude Code session. The page opens in your browser. It answers on `127.0.0.1` only, which means that only your own computer can reach it.
 
 The page opens on Messages with every session in the list, as in the screenshot above. The newest prompt is at the top.
 
@@ -166,22 +166,22 @@ The last button in the top bar switches between the light theme and the dark the
 
 ## Install
 
-Farman needs Node 22.13 or newer and Claude Code. It works on Windows, macOS and Linux. It uses no packages, only what Node ships with.
+GetFarman needs Node 22.13 or newer and Claude Code. It works on Windows, macOS and Linux. It uses no packages, only what Node ships with.
 
 ```sh
-npx farman
+npx getfarman
 ```
 
-The first run sets Farman up and opens the page in your browser. `yarn dlx farman` does the same.
+The first run sets GetFarman up and opens the page in your browser. `yarn dlx getfarman` does the same.
 
-The setup also puts the `farman` command on your PATH. From then on you type `farman` in any new terminal, without npx.
+The setup also puts the `getfarman` command on your PATH. From then on you type `getfarman` in any new terminal, without npx.
 
-The setup copies the app to `~/.farman`, adds three hooks to Claude Code's settings and adds the `/farman` command. It saves a backup of your settings first and leaves your other hooks alone.
+The setup copies the app to `~/.getfarman`, adds three hooks to Claude Code's settings and adds the `/getfarman` command. It saves a backup of your settings first and leaves your other hooks alone.
 
 Then check the install.
 
 ```sh
-farman doctor --call
+getfarman doctor --call
 ```
 
 ## Commands
@@ -190,21 +190,21 @@ Type these in a Claude Code session. The hook answers them, so they never reach 
 
 | Command | What happens |
 |---|---|
-| `/farman` | Opens the page |
-| `/farman now` | Reviews the new prompts that wait in this session |
-| `/farman status` | Shows the mode, the counts and the last review |
-| `/farman on`, `hand` or `off` | Sets the mode |
+| `/getfarman` | Opens the page |
+| `/getfarman now` | Reviews the new prompts that wait in this session |
+| `/getfarman status` | Shows the mode, the counts and the last review |
+| `/getfarman on`, `hand` or `off` | Sets the mode |
 
-In a terminal, `farman open` opens the page, `farman model sonnet` changes the reviewer and `farman remove` uninstalls Farman.
+In a terminal, `getfarman open` opens the page, `getfarman model sonnet` changes the reviewer and `getfarman remove` uninstalls GetFarman.
 
 ## Privacy
 
-Your prompts and the ends of Claude's replies are stored as plain text in `~/.farman/farman.db`. They leave your computer only when a review sends them to Claude through your own `claude` login. `farman forget --all` empties the log.
+Your prompts and the ends of Claude's replies are stored as plain text in `~/.getfarman/getfarman.db`. They leave your computer only when a review sends them to Claude through your own `claude` login. `getfarman forget --all` empties the log.
 
 ## Licence
 
-Farman is under the [MIT License](LICENSE). You may use it, change it and share it, also commercially. Keep the copyright notice and the licence text with every copy.
+GetFarman is under the [MIT License](LICENSE). You may use it, change it and share it, also commercially. Keep the copyright notice and the licence text with every copy.
 
 ## Full guide
 
-The full guide is in [docs/guide.md](docs/guide.md). It covers every command, the files that Farman keeps and what to do when something fails.
+The full guide is in [docs/guide.md](docs/guide.md). It covers every command, the files that GetFarman keeps and what to do when something fails.

@@ -8,13 +8,13 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 
-const BIN = path.resolve(__dirname, '..', 'bin', 'farman.js');
-const box = fs.mkdtempSync(path.join(os.tmpdir(), 'farman-test-'));
-const home = path.join(box, '.farman');
+const BIN = path.resolve(__dirname, '..', 'bin', 'getfarman.js');
+const box = fs.mkdtempSync(path.join(os.tmpdir(), 'getfarman-test-'));
+const home = path.join(box, '.getfarman');
 const claude = path.join(box, '.claude');
-// FARMAN_NO_PATH keeps setup and remove away from your real PATH.
-const env = Object.assign({}, process.env, { FARMAN_HOME: home, CLAUDE_CONFIG_DIR: claude, USERPROFILE: box, HOME: box, FARMAN_NO_PATH: '1' });
-delete env.FARMAN_REVIEWER;
+// GETFARMAN_NO_PATH keeps setup and remove away from your real PATH.
+const env = Object.assign({}, process.env, { GETFARMAN_HOME: home, CLAUDE_CONFIG_DIR: claude, USERPROFILE: box, HOME: box, GETFARMAN_NO_PATH: '1' });
+delete env.GETFARMAN_REVIEWER;
 const PORT = 4791;
 
 const run = (args, input) => cp.spawnSync(process.execPath, [BIN].concat(args), { env, input, encoding: 'utf8', timeout: 20000 });
@@ -53,9 +53,9 @@ const ok = name => console.log('  ok   ' + (++step) + '. ' + name);
   assert.strictEqual(s.model, 'x');
   assert.strictEqual(s.hooks.Stop.length, 2);
   assert.ok(s.hooks.UserPromptSubmit[0].hooks[0].command.endsWith(' hook'));
-  assert.ok(fs.existsSync(path.join(home, 'app', 'bin', 'farman.js')));
-  assert.ok(fs.existsSync(path.join(claude, 'skills', 'farman', 'SKILL.md')));
-  assert.ok(fs.readdirSync(claude).some(f => f.startsWith('settings.json.farman-backup-')));
+  assert.ok(fs.existsSync(path.join(home, 'app', 'bin', 'getfarman.js')));
+  assert.ok(fs.existsSync(path.join(claude, 'skills', 'getfarman', 'SKILL.md')));
+  assert.ok(fs.readdirSync(claude).some(f => f.startsWith('settings.json.getfarman-backup-')));
   ok('setup copies the app, adds three hooks and keeps the other hook');
 
   r = run(['setup', '--no-history']);
@@ -78,11 +78,11 @@ const ok = name => console.log('  ok   ' + (++step) + '. ' + name);
   assert.ok(r.stdout.includes('2 prompts logged, 2 not reviewed yet'), r.stdout);
   ok('hooks log prompts once each and stay silent');
 
-  r = hook({ hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt: '/farman status' });
+  r = hook({ hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt: '/getfarman status' });
   assert.strictEqual(r.status, 2);
-  assert.ok(r.stderr.startsWith('Farman: by hand.'), r.stderr);
+  assert.ok(r.stderr.startsWith('GetFarman: by hand.'), r.stderr);
   assert.strictEqual(r.stdout, '');
-  ok('/farman is answered by the hook and blocked');
+  ok('/getfarman is answered by the hook and blocked');
 
   // 3. history import reads a transcript and does not repeat a prompt that the hook logged
   const proj = path.join(claude, 'projects', 'demo');
@@ -102,7 +102,7 @@ const ok = name => console.log('  ok   ' + (++step) + '. ' + name);
   ok('import adds only real prompts and skips unchanged files');
 
   // 4. a review result is stored, and the glossary follows
-  process.env.FARMAN_HOME = home;
+  process.env.GETFARMAN_HOME = home;
   const F = require(BIN);
   const con = F.connect();
   const t = con.get("SELECT id, n, said FROM turns WHERE session_id='s1' AND n=1");
@@ -123,23 +123,28 @@ const ok = name => console.log('  ok   ' + (++step) + '. ' + name);
   let up = false;
   for (let i = 0; i < 40 && !up; i++) {
     await sleep(150);
-    up = await get('/api/ping').then(x => x.status === 200 && JSON.parse(x.text).farman, () => false);
+    up = await get('/api/ping').then(x => x.status === 200 && JSON.parse(x.text).getfarman, () => false);
   }
   assert.ok(up, 'the server did not start');
   const pageRes = await get('/');
   assert.strictEqual(pageRes.status, 200);
   assert.ok(pageRes.headers['content-security-policy']);
   const token = fs.readFileSync(path.join(home, 'token'), 'utf8').trim();
-  assert.ok(pageRes.text.includes(token) && !pageRes.text.includes('__FARMAN_TOKEN__'));
+  assert.ok(pageRes.text.includes(token) && !pageRes.text.includes('__GETFARMAN_TOKEN__'));
+  // the page must not ask for a newer server than the one in this package, or it shows a false warning
+  const needs = /NEEDS='([0-9.]+)'/.exec(pageRes.text)[1].split('.').map(Number);
+  const have = F.VERSION.split('.').map(Number);
+  assert.ok(needs[0] < have[0] || (needs[0] === have[0] && (needs[1] < have[1] || (needs[1] === have[1] && needs[2] <= have[2]))),
+    'the page needs server ' + needs.join('.') + ' but this is ' + F.VERSION);
   assert.strictEqual((await get('/api/overview')).status, 403);
-  assert.strictEqual((await get('/api/overview', { 'X-Farman-Token': token, Origin: 'http://evil.example' })).status, 403);
-  const H = { 'X-Farman-Token': token };
+  assert.strictEqual((await get('/api/overview', { 'X-GetFarman-Token': token, Origin: 'http://evil.example' })).status, 403);
+  const H = { 'X-GetFarman-Token': token };
   const ov = JSON.parse((await get('/api/overview?group=project', H)).text);
   assert.strictEqual(ov.all.n, 3);
   assert.strictEqual(ov.all.sessions, 2);
   assert.deepStrictEqual(ov.counts, { better: 1, precise: 0, pending: 2 });
   assert.strictEqual(ov.projects[0].name, 'shop');
-  assert.strictEqual(ov.home_short, '~' + path.sep + '.farman');
+  assert.strictEqual(ov.home_short, '~' + path.sep + '.getfarman');
   const turns = JSON.parse((await get('/api/turns?scope=s1&desc=1', H)).text);
   assert.strictEqual(turns.total, 2);
   assert.strictEqual(turns.items[1].pairs[0].term, 'border-left');
@@ -170,25 +175,25 @@ const ok = name => console.log('  ok   ' + (++step) + '. ' + name);
   s = JSON.parse(fs.readFileSync(settings, 'utf8'));
   assert.deepStrictEqual(Object.keys(s.hooks), ['Stop']);
   assert.strictEqual(s.hooks.Stop[0].hooks[0].command, 'echo other');
-  assert.ok(fs.existsSync(path.join(home, 'farman.db')) && !fs.existsSync(path.join(home, 'app')));
+  assert.ok(fs.existsSync(path.join(home, 'getfarman.db')) && !fs.existsSync(path.join(home, 'app')));
   ok('remove takes the hooks out and keeps the log');
 
-  // 7. the farman command on the PATH: a shell's start-up file
+  // 7. the getfarman command on the PATH: a shell's start-up file
   const rc = path.join(box, '.zshrc');
   fs.writeFileSync(rc, 'alias ll="ls -l"\n');
-  assert.strictEqual(F.profileLine('/home/sam/.farman/bin', true, rc), 'added');
-  assert.strictEqual(F.profileLine('/home/sam/.farman/bin', true, rc), 'present');
-  assert.ok(fs.readFileSync(rc, 'utf8').endsWith('\n# Added by Farman\nexport PATH="/home/sam/.farman/bin:$PATH"\n'));
-  assert.strictEqual(F.profileLine('/home/sam/.farman/bin', false, rc), 'removed');
+  assert.strictEqual(F.profileLine('/home/sam/.getfarman/bin', true, rc), 'added');
+  assert.strictEqual(F.profileLine('/home/sam/.getfarman/bin', true, rc), 'present');
+  assert.ok(fs.readFileSync(rc, 'utf8').endsWith('\n# Added by GetFarman\nexport PATH="/home/sam/.getfarman/bin:$PATH"\n'));
+  assert.strictEqual(F.profileLine('/home/sam/.getfarman/bin', false, rc), 'removed');
   assert.strictEqual(fs.readFileSync(rc, 'utf8'), 'alias ll="ls -l"\n');
-  assert.strictEqual(F.profileLine('/home/sam/.farman/bin', false, rc), 'absent');
+  assert.strictEqual(F.profileLine('/home/sam/.getfarman/bin', false, rc), 'absent');
   ok('a shell start-up file gains two lines and loses them again');
 
   // 8. the same on Windows, against a scratch registry key and never the real PATH
   if (process.platform === 'win32') {
-    const key = 'Software\\FarmanSmokeTest';
+    const key = 'Software\\GetFarmanSmokeTest';
     const first = '%USERPROFILE%\\one;C:\\Two\\';
-    const mine = 'C:\\Farman Test\\bin';
+    const mine = 'C:\\GetFarman Test\\bin';
     try {
       cp.spawnSync('reg', ['add', 'HKCU\\' + key, '/v', 'Path', '/t', 'REG_EXPAND_SZ', '/d', first, '/f']);
       assert.strictEqual(F.winUserPath('add', mine, key), 'added');
