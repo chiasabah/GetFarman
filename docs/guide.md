@@ -186,6 +186,6 @@ farman remove --purge   # also deletes the log and settings
 | A hook error after a Node update | Run `farman setup`. It records the new path to Node. |
 | "Farman needs Node 22.13 or newer" | Install a newer Node from nodejs.org, then run `npx farman` again. |
 | The page says "Offline" | Run `farman open` again. The server stops after 30 idle minutes. |
-| "Farman was updated, but the server…" | Press "Stop the server" in that notice, then run `farman open`. From 0.3 on, the server restarts itself after an update. |
+| "Farman was updated, but the server…" | Press "Stop the server" in that notice, then run `farman open`. The server restarts itself after an update. |
 | A prompt you just sent seems missing | It is in the session at the top of the sidebar. Inside a session the newest prompt is at the bottom; View, "Newest first" turns that round. |
 | Terms come back too general | `farman model sonnet`, or edit the reviewer's instructions in Settings. |

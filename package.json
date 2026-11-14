@@ -1,6 +1,6 @@
 {
   "name": "farman",
-  "version": "0.5.1",
+  "version": "0.1.0",
   "description": "A sidecar prompt coach for Claude Code. It keeps a glossary and teaches you the exact term for what you mean.",
   "keywords": [
     "claude",
