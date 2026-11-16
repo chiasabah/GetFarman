@@ -14,7 +14,7 @@ const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
 const SELF = __filename;
-let VERSION = '0.1.0';
+let VERSION = '0.1.1';
 try { VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version || VERSION; } catch (e) { /* keep the default */ }
 const SCHEMA_VERSION = 3;
 
@@ -1431,7 +1431,63 @@ function apiTurns(con, P) {
     stamp: metaGet(con, 'stamp', '0') };
 }
 
-const TERM_SORTS = { term: false, gloss: false, said: false, project: false, last_at: true, times: true };
+const TERM_SORTS = { term: false, gloss: false, said: false, uptake: false, project: false, last_at: true, times: true };
+const UPTAKE_SCAN = 20000;     // how many of the latest prompts are searched for taught terms
+const UPTAKE_RANK = { lay: 0, new: 1, picked: 2 };
+
+/** How to find a term in a prompt: as whole words, with the usual endings (cache, caches, cached, caching). */
+function termMatcher(key) {
+  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const forms = [esc(key) + '(?:s|es|d|ed|ing)?'];
+  let stem = key;
+  if (/[a-z]e$/.test(key)) {
+    stem = key.slice(0, -1);
+    forms.push(esc(stem) + '(?:ing|ed|ion|ions)');
+  }
+  return { stem, re: new RegExp('(?<![a-z0-9])(?:' + forms.join('|') + ')(?![a-z0-9])') };
+}
+
+/** For each taught term: did you write it yourself later, or describe it in other words again?
+
+    A plain text comparison over the whole log, no model. "picked" means that the latest sign is
+    your own use of the term, "lay" that the latest sign is another lay phrase for it, and "new"
+    that nothing was seen since it was taught. */
+function termUptake(con) {
+  const terms = new Map();
+  for (const r of con.all('SELECT p.term, p.turn_id, t.at FROM pairs p JOIN turns t ON t.id=p.turn_id ORDER BY t.at, p.i')) {
+    const key = squash(r.term).toLowerCase();
+    if (!key) continue;
+    let e = terms.get(key);
+    if (!e) {
+      e = Object.assign({ first_at: r.at, taught: new Set(), again: 0, last_again_at: null, used: 0, last_used_at: null, before: 0 }, termMatcher(key));
+      terms.set(key, e);
+    }
+    if (!e.taught.has(r.turn_id)) {
+      e.taught.add(r.turn_id);
+      if (r.at > e.first_at) { e.again += 1; e.last_again_at = r.at; }
+    }
+  }
+  if (!terms.size) return terms;
+  const list = Array.from(terms.values());
+  for (const t of con.all('SELECT id, at, said FROM turns ORDER BY at DESC LIMIT ' + UPTAKE_SCAN)) {
+    const text = squash(ownText(t.said)[1]).toLowerCase().slice(0, 4000);
+    if (!text) continue;
+    for (const e of list) {
+      if (e.taught.has(t.id) || !text.includes(e.stem) || !e.re.test(text)) continue;
+      if (t.at > e.first_at) {
+        e.used += 1;
+        if (!e.last_used_at || t.at > e.last_used_at) e.last_used_at = t.at;
+      } else {
+        e.before += 1;
+      }
+    }
+  }
+  for (const e of list) {
+    const use = e.last_used_at || 0, lay = e.last_again_at || 0;
+    e.state = !use && !lay ? 'new' : use >= lay ? 'picked' : 'lay';
+  }
+  return terms;
+}
 
 /** The Glossary view: the term, its definition and what the user said instead.
 
@@ -1455,12 +1511,20 @@ function apiCards(con, P) {
     c.projects.push({ project: r.project, name });     // the latest project comes last
     Object.assign(c, { last_at: r.at, session_id: r.session_id, session: r.title, project: name });
   }
+  const uptake = termUptake(con);
+  for (const [key, c] of cards) {
+    const u = uptake.get(key);
+    c.uptake = u ? { state: u.state, used: u.used, last_used_at: u.last_used_at, again: u.again, last_again_at: u.last_again_at, before: u.before }
+      : { state: 'new', used: 0, last_used_at: null, again: 0, last_again_at: null, before: 0 };
+  }
   let items = Array.from(cards.values());
   const q = squash(P.q).toLowerCase();
   if (q) items = items.filter(c => [c.term, c.gloss || '', c.said.join(' '), c.project].join(' ').toLowerCase().includes(q));
   const sort = P.sort in TERM_SORTS ? P.sort : 'last_at';
   const down = ['asc', 'desc'].includes(P.dir) ? P.dir === 'desc' : TERM_SORTS[sort];
-  const key = sort === 'last_at' || sort === 'times' ? c => c[sort] : c => String((sort === 'said' ? c.said[0] : c[sort]) || '').toLowerCase();
+  const key = sort === 'last_at' || sort === 'times' ? c => c[sort]
+    : sort === 'uptake' ? c => UPTAKE_RANK[c.uptake.state] * 1e6 - (c.uptake.state === 'picked' ? c.uptake.used : c.uptake.again)
+      : c => String((sort === 'said' ? c.said[0] : c[sort]) || '').toLowerCase();
   const cmp = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
   items.sort((x, y) => cmp(x.term.toLowerCase(), y.term.toLowerCase()));
   items.sort((x, y) => (down ? cmp(key(y), key(x)) : cmp(key(x), key(y))));
@@ -2261,5 +2325,5 @@ if (require.main === module) {
     });
 } else {
   module.exports = { VERSION, HOME, connect, applyReview, words, firstLine, ownText, sessionTimes, bump, cleanConfig, hookCommand, editSettings,
-    hooksRegistered, parseTranscript, termUsed, shortenPath, winUserPath, profileLine };
+    hooksRegistered, parseTranscript, termUsed, shortenPath, winUserPath, profileLine, termMatcher, termUptake };
 }

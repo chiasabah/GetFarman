@@ -93,7 +93,15 @@ Reviews shows the same prompts as a table. The columns are You said, Meant, Bett
 
 ![The column names and the first four terms close up](docs/screenshots/glossary-crop.png)
 
-Glossary has one row for each term. A row gives the term, its definition, what you said instead, the project, when you last used it and how often. Click a column name to sort by it. Click a term to see the prompts that it came from.
+Glossary has one row for each term. A row gives the term, its definition, what you said instead, what happened since it was taught, the project, when it last came up and how often. Click a column name to sort by it. Click a term to see the prompts that it came from.
+
+The Since taught column shows whether a term has stuck. GetFarman compares your later prompts with the term as plain text and uses no model for it.
+
+| Sign | Meaning |
+|---|---|
+| You use it now | A later prompt of yours holds the term. |
+| Described again | After the term was taught, you described the same thing in other words. |
+| Not seen since | No later prompt used the term or described it again. |
 
 ### Filters
 

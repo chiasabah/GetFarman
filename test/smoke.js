@@ -163,6 +163,30 @@ const ok = name => console.log('  ok   ' + (++step) + '. ' + name);
   assert.strictEqual((await post('/api/config', {}, { every: 5 })).status, 403);
   ok('the server gives the page and the API only to a caller with the key');
 
+  // since taught: a later prompt that holds the term counts as picked up, another lay phrase after that counts as still lay
+  const card = async term => JSON.parse((await get('/api/cards?sort=uptake', H)).text).items.find(c => c.term === term);
+  assert.strictEqual((await card('border-left')).uptake.state, 'new');
+  hook({ hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt_id: 'p3', cwd, prompt: 'make the border-left thicker when the box is hovered' });
+  hook({ hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt_id: 'p4', cwd, prompt: 'the borderleft-ish colour is fine, leave the left side alone' });
+  let seen = (await card('border-left')).uptake;
+  assert.deepStrictEqual([seen.state, seen.used, seen.again], ['picked', 1, 0]);
+  const con2 = F.connect();
+  const later = Date.now() / 1000 + 60;
+  const tid = Number(con2.run("INSERT INTO turns(session_id,n,at,said,said_words,state,better) VALUES('s1',9,?,?,?,'better','Give it a border-left and an ellipsis.')",
+    [later, 'put the little line on the left back and cut the text off with three dots', 14]).lastInsertRowid);
+  con2.run("INSERT INTO pairs(turn_id,i,said,term,gloss) VALUES(?,0,'the little line on the left','border-left','The line on the left edge')", [tid]);
+  con2.run("INSERT INTO pairs(turn_id,i,said,term,gloss) VALUES(?,1,'cut the text off with three dots','ellipsis','The three dots that mark clipped text')", [tid]);
+  con2.close();
+  seen = (await card('border-left')).uptake;
+  assert.deepStrictEqual([seen.state, seen.used, seen.again], ['lay', 1, 1]);
+  assert.strictEqual((await card('ellipsis')).uptake.state, 'new');
+  const order = JSON.parse((await get('/api/cards?sort=uptake', H)).text).items.map(c => c.uptake.state);
+  assert.deepStrictEqual(order, ['lay', 'new']);
+  const deb = F.termMatcher('debounce');
+  assert.ok(deb.re.test('please debounce it') && deb.re.test('it is debounced now') && deb.re.test('try debouncing') && !deb.re.test('undebounceable'));
+  assert.ok(F.termMatcher('paginate').re.test('add pagination') && !F.termMatcher('test').re.test('the latest build'));
+  ok('the glossary says whether a taught term was picked up, described again or not seen since');
+
   assert.strictEqual(JSON.parse((await post('/api/shutdown', H, {})).text).stopped, true);
   await sleep(700);
   assert.ok(!fs.existsSync(path.join(home, 'server.json')));

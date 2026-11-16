@@ -332,7 +332,7 @@ mark{background:none;color:inherit}
 .system-note-text{white-space:pre-wrap;overflow-wrap:anywhere}
 
 /* cards: one row for each term, with its definition and what you said instead */
-.log{--card-columns:minmax(130px,.9fr) minmax(0,1.7fr) minmax(0,1.3fr) minmax(100px,.8fr) 150px 52px}
+.log{--card-columns:minmax(120px,.85fr) minmax(0,1.35fr) minmax(0,1.15fr) minmax(140px,.8fr) minmax(118px,.72fr) 142px 44px}
 .cards{flex:1;min-height:0;overflow-y:auto;padding-bottom:72px}
 .card-row{display:grid;grid-template-columns:var(--card-columns);column-gap:22px;padding:11px 24px;border-top:1px solid var(--line);font-size:13.5px;line-height:1.5;align-items:start}
 .card-row:first-child{border-top:0}
@@ -344,6 +344,12 @@ mark{background:none;color:inherit}
 .card-said{display:grid;gap:3px;justify-items:start}
 .card-said .lay-phrase{--c:var(--muted);background:none;padding:1px 0}
 .card-project,.card-when,.card-times{color:var(--muted);font-size:13px}
+/* since taught: do you write the term yourself now, or still describe it? */
+.card-uptake{display:grid;gap:1px;justify-items:start;font-size:13px}
+.uptake-state{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.uptake-fact{color:var(--muted);font-size:12px;padding-left:18px}
+.card-uptake.is-new .uptake-state{color:var(--muted)}
+.card-project{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card-times,.column-heads[data-view="cards"] .column-head:last-child{text-align:right;justify-self:end}
 .card-more{font-size:12px;margin-left:4px}
 
@@ -398,6 +404,7 @@ mark{background:none;color:inherit}
   .card-row{grid-template-columns:minmax(0,1fr);row-gap:3px;padding:12px 16px}
   .card-times,.column-heads[data-view="cards"] .column-head:last-child{text-align:left;justify-self:start}
   .card-label{display:inline;margin-right:6px}
+  .card-project{white-space:normal}
   .cell-label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:3px}
   .group-head,.notice,.empty-state{padding-left:16px;padding-right:16px}
   .session-head{padding:14px 16px 0}
@@ -530,7 +537,7 @@ const CHEVRON='<svg class="chevron" aria-hidden="true"><use href="#glyph-chevron
 const DIVIDER='<svg class="group-divider" aria-hidden="true"><rect width="100%" height="100%" fill="url(#squiggle)"/></svg>';
 const KEY='getfarman.page.v3', PAGE=50, OVER=700;
 const VIEWS=[['messages','Messages'],['reviews','Reviews'],['cards','Glossary']];
-const CARD_COLS=[['term','Term'],['gloss','Definition'],['said','You said'],['project','Project'],['last_at','Last used'],['times','Times']];
+const CARD_COLS=[['term','Term'],['gloss','Definition'],['said','You said'],['uptake','Since taught'],['project','Project'],['last_at','Last used'],['times','Times']];
 const NOTE_KIND={'system-reminder':'System reminder','task-notification':'Task notification'};
 const UNUSED='<span class="pair-flag" title="The reviewer named this term but did not use it in the better prompt. A plain text comparison found this, not a model.">found, not used</span>';
 const PERIODS=[['all','All'],['today','Today'],['7d','7 days'],['30d','30 days'],['custom','Custom']];
@@ -962,6 +969,19 @@ function renderTable(){
   renderLocation();
 }
 const OFFLINE=()=>'<div class="empty-state"><p><b>'+(state.stopped?'The server is stopped.':'The page cannot reach GetFarman.')+'</b></p><p>To start it again, run <code>getfarman open</code> in a terminal, or type <code>/getfarman</code> in a Claude Code session. This page reconnects by itself.</p></div>';
+/* Since taught: a plain text comparison of your later prompts with the term, made by the server with no model. */
+const UPTAKE={picked:['precise','You use it now'],lay:['better','Described again'],new:['pending','Not seen since']};
+function uptakeCell(c){
+  const u=c.uptake; if(!u) return '<div class="card-cell card-uptake"></div>';
+  const [glyph,label]=UPTAKE[u.state]||UPTAKE.new, plain=' A plain text comparison found this, not a model.';
+  const fact=u.state==='picked'?'in '+n1(u.used,'prompt'):u.state==='lay'?n1(u.again,'more time'):'';
+  const tip=(u.state==='picked'?'After this term was taught you wrote it yourself in '+n1(u.used,'prompt')+', last on '+fmt(u.last_used_at)+'.'
+    :u.state==='lay'?'After this term was taught you described it in other words '+n1(u.again,'more time')+', last on '+fmt(u.last_again_at)+'.'+(u.used?' You also wrote it yourself in '+n1(u.used,'prompt')+' before that.':'')
+    :'No prompt since this term was taught has used it or described it again.')+(u.before?' You had also written it '+n1(u.before,'time')+' before it was taught.':'')+plain;
+  return '<div class="card-cell card-uptake is-'+u.state+'" title="'+esc(tip)+'"><span class="card-label visually-hidden">Since taught: </span>'+
+    '<span class="uptake-state"><svg class="state-glyph is-'+glyph+'" aria-hidden="true"><use href="#glyph-'+glyph+'"/></svg>'+label+'</span>'+
+    (fact?'<span class="uptake-fact">'+fact+'</span>':'')+'</div>';
+}
 function renderCards(){
   const box=$('#cards');
   if(!online){ box.innerHTML=OFFLINE(); return; }
@@ -974,6 +994,7 @@ function renderCards(){
         (miss>0?'<div><span class="pair-flag" title="In '+miss+' of '+n1(c.times,'prompt')+' the reviewer named this term but did not use it in the better prompt. A plain text comparison found this, not a model.">found, not used'+(c.times>1?' in '+miss+' of '+c.times:'')+'</span></div>':'')+'</div>'+
       '<div class="card-cell card-gloss"><span class="card-label visually-hidden">Definition: </span>'+hi(c.gloss||'')+'</div>'+
       '<div class="card-cell card-said"><span class="card-label visually-hidden">You said: </span>'+c.said.map(x=>'<span class="lay-phrase">'+hi(x)+'</span>').join('')+'</div>'+
+      uptakeCell(c)+
       '<div class="card-cell card-project" title="'+esc(where.map(x=>projectLabel(x.project)).join(', '))+'">'+(where.length?hi(projectLabel(where[0].project)):'')+(where.length>1?'<span class="card-more">+'+(where.length-1)+'</span>':'')+'</div>'+
       '<div class="card-cell card-when">'+fmt(c.last_at)+'</div>'+
       '<div class="card-cell card-times" title="'+n1(c.times,'time')+'">'+num(c.times)+'</div></div>'; }).join('')+
