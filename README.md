@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/getfarman"><img src="https://img.shields.io/npm/v/getfarman?label=npm" alt="npm version"></a>
   <a href="https://www.npmjs.com/package/getfarman"><img src="https://img.shields.io/npm/dt/getfarman?label=downloads" alt="downloads"></a>
-  <a href="https://packagephobia.com/result?p=getfarman"><img src="https://packagephobia.com/badge?p=getfarman" alt="install size"></a>
+  <a href="https://packagephobia.com/result?p=getfarman"><img src="https://img.shields.io/npm/unpacked-size/getfarman?label=install%20size" alt="install size"></a>
   <a href="LICENSE"><img src="https://img.shields.io/npm/l/getfarman?label=license" alt="license"></a>
 </p>
 
