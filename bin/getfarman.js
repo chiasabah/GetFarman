@@ -14,7 +14,7 @@ const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
 const SELF = __filename;
-let VERSION = '0.1.1';
+let VERSION = '0.1.2';
 try { VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version || VERSION; } catch (e) { /* keep the default */ }
 const SCHEMA_VERSION = 3;
 
