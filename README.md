@@ -207,7 +207,7 @@ In a terminal, `getfarman open` opens the page, `getfarman model sonnet` changes
 
 ## Privacy
 
-Your prompts and the ends of Claude's replies are stored as plain text in `~/.getfarman/getfarman.db`. They leave your computer only when a review sends them to Claude through your own `claude` login. `getfarman forget --all` empties the log.
+Your prompts and the ends of Claude's replies are stored as plain text in `~/.getfarman/getfarman.db`. They leave your computer only when a review sends them to Claude through your own `claude` login. The reviewer runs with no tools and no MCP servers, so text in your log cannot make it act on your computer. `getfarman forget --all` empties the log.
 
 ## Licence
 

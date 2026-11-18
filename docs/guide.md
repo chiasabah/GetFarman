@@ -157,6 +157,7 @@ Query it yourself with `sqlite3 ~/.getfarman/getfarman.db`.
 
 - Your prompts and the ends of Claude's replies are stored in plain text in `~/.getfarman/getfarman.db`, readable only by your user. They leave your machine only when a review sends them to Claude through your own `claude` login.
 - The page answers on `127.0.0.1` only and needs a key that only the page itself carries.
+- The reviewer runs with its tools and its MCP servers switched off. Text from your log is escaped before it is sent. So an instruction inside a pasted page cannot make the reviewer read or change anything on your computer.
 - A review is one small call for up to 12 prompts. Reviewing 300 prompts is about 25 calls.
 - `getfarman forget --all` empties the log.
 
@@ -181,6 +182,7 @@ getfarman remove --purge   # also deletes the log and settings
 | You see | Do this |
 |---|---|
 | Nothing is logged | `getfarman doctor`. If the hooks are listed, restart Claude Code. Check `getfarman status` is not "off". |
+| "This version of claude does not know `--tools`" | Update Claude Code, then press "Review now". GetFarman runs a review only when the reviewer's tools can be switched off. |
 | "The last review failed" | The reason is on the page and in `getfarman status`. A login problem needs `claude` to work in a terminal first; then press "Review now". |
 | `/getfarman` reaches Claude | The hook did not run. `getfarman doctor`, then run `getfarman setup`. |
 | A hook error after a Node update | Run `getfarman setup`. It records the new path to Node. |

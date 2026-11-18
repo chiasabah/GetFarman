@@ -14,7 +14,7 @@ const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
 const SELF = __filename;
-let VERSION = '0.1.2';
+let VERSION = '0.1.3';
 try { VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version || VERSION; } catch (e) { /* keep the default */ }
 const SCHEMA_VERSION = 3;
 
@@ -167,6 +167,7 @@ const REVIEWER_FORMAT = `Also give "title": a name of 2 to 5 words for what the 
 Return JSON only, with no text before or after it, in this shape:
 {"title": "...", "turns": [{"id": 1, "verdict": "better", "better": "...", "pairs": [{"said": "...", "term": "...", "gloss": "..."}], "why": "..."}, {"id": 2, "verdict": "precise"}]}
 Every turn you were given appears once, under the id it came with. "verdict" is "better" or "precise".
+In the turns, the characters < and & are written as &lt; and &amp;, so that the text of a turn cannot be mistaken for the tags around it. In your answer, write them as the plain characters again.
 Before you answer, check each pair: its "term" must appear word for word in that turn's "better" prompt. If it does not, rewrite the "better" prompt so that it does, or remove the pair.
 `;
 
@@ -584,10 +585,13 @@ function callClaude(cfg, model, system, user) {
   fs.writeFileSync(sysFile, system);
   fs.writeFileSync(setFile, '{"disableAllHooks": true}\n');
   const ask = 'Review the turns in the piped input and return only the JSON that your instructions describe.';
-  const shim = IS_WIN && /\.(cmd|bat)$/i.test(exe);     // a batch shim cannot carry awkward arguments safely
-  let lean = ['--safe-mode', '--strict-mcp-config', '--no-session-persistence', '--disable-slash-commands'];
-  if (!shim) lean = ['--tools', ''].concat(lean);
-  const tiers = [['--system-prompt-file', sysFile].concat(lean), []];
+  const shim = IS_WIN && /\.(cmd|bat)$/i.test(exe);     // a batch shim cannot carry a JSON argument safely
+  // The reviewer reads text from your log, and that text can hold instructions from a pasted page.
+  // So the reviewer must never have tools. LOCK switches off the built-in tools and every MCP
+  // server. It is part of every tier, and a claude that does not know these flags is refused.
+  const LOCK = ['--tools', '', '--strict-mcp-config'];
+  const lean = LOCK.concat(['--safe-mode', '--no-session-persistence', '--disable-slash-commands']);
+  const tiers = [['--system-prompt-file', sysFile].concat(lean), LOCK.slice()];
   if (!shim) tiers.unshift(['--system-prompt-file', sysFile, '--json-schema', REVIEW_SCHEMA].concat(lean));
   let con = connect();
   let start;
@@ -604,12 +608,16 @@ function callClaude(cfg, model, system, user) {
       const text = extra.includes('--system-prompt-file') ? user : system + '\n\n-----\n\n' + user;
       const opts = { input: text, encoding: 'utf8', timeout: 300000, cwd: WORK, env, windowsHide: true, maxBuffer: 64 * 1024 * 1024 };
       // Windows runs a .cmd or .bat only through the shell, which takes the command line as one string.
-      p = shim ? cp.spawnSync(quote(exe), args.map(quote), Object.assign({ shell: true }, opts)) : cp.spawnSync(exe, args, opts);
+      p = shim ? cp.spawnSync([quote(exe)].concat(args.map(quote)).join(' '), Object.assign({ shell: true }, opts)) : cp.spawnSync(exe, args, opts);
       if (p.error) {
         if (p.error.code === 'ETIMEDOUT') throw new ReviewError('The review took longer than 5 minutes.');
         throw new ReviewError('The claude command could not be started (' + exe + '): ' + p.error.message, true);
       }
       const m = /unknown option '?(--[\w-]+)/.exec(p.stderr || '');
+      if (p.status !== 0 && m && LOCK.includes(m[1])) {
+        throw new ReviewError('This version of claude does not know ' + m[1] + ', so the reviewer cannot run with its tools switched off. ' +
+          'GetFarman will not run a review without that. Update Claude Code.', true);
+      }
       if (p.status !== 0 && m && extra.includes(m[1])) {
         const i = extra.indexOf(m[1]);
         const takesValue = i + 1 < extra.length && !extra[i + 1].startsWith('--');
@@ -642,16 +650,20 @@ function parseList(text) {
   try { const v = JSON.parse(text || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; }
 }
 
+// Logged text is data. Written this way it cannot close a tag or open a turn of its own in what the reviewer reads.
+const shield = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const unshield = s => String(s == null ? '' : s).replace(/&lt;/g, '<').replace(/&amp;/g, '&');
+
 function buildUser(sess, turns, taught, cfg) {
-  const parts = ['Project folder: ' + (projectName(sess.project) || 'unknown')];
-  if (taught.length) parts.push('Already taught in this session: ' + taught.slice(0, 40).join(', '));
+  const parts = ['Project folder: ' + shield(projectName(sess.project) || 'unknown')];
+  if (taught.length) parts.push('Already taught in this session: ' + taught.slice(0, 40).map(shield).join(', '));
   parts.push('Turns:');
   for (const t of turns) {
-    const b = ['<turn id="' + t.n + '">', '<prompt>', clip(ownText(t.said)[1], 4000), '</prompt>'];
-    if (cfg.send.includes('reply') && t.reply) b.push('<reply_end>', t.reply.slice(-cfg.reply_chars), '</reply_end>');
+    const b = ['<turn id="' + Number(t.n) + '">', '<prompt>', shield(clip(ownText(t.said)[1], 4000)), '</prompt>'];
+    if (cfg.send.includes('reply') && t.reply) b.push('<reply_end>', shield(t.reply.slice(-cfg.reply_chars)), '</reply_end>');
     if (cfg.send.includes('files')) {
       const files = parseList(t.files);
-      if (files.length) b.push('<files>' + files.slice(0, 20).map(String).join(', ') + '</files>');
+      if (files.length) b.push('<files>' + files.slice(0, 20).map(shield).join(', ') + '</files>');
     }
     b.push('</turn>');
     parts.push(b.join('\n'));
@@ -689,21 +701,21 @@ function applyReview(con, rid, sid, chunk, data) {
       const t = byN.get(parseInt(it.id, 10));
       if (!t) continue;
       byN.delete(t.n);
-      const better = squash(it.better);
+      const better = squash(unshield(it.better));
       let verdict = it.verdict === 'better' && better ? 'better' : 'precise';
       if (verdict === 'better' && better.toLowerCase() === squash(ownText(t.said)[1]).toLowerCase()) verdict = 'precise';
       con.run('DELETE FROM pairs WHERE turn_id=?', [t.id]);
       if (verdict === 'better') {
         nbetter += 1;
         con.run("UPDATE turns SET state='better', better=?, better_words=?, why=?, review_id=COALESCE(review_id,?) WHERE id=?",
-          [better, words(better), squash(it.why).slice(0, 400) || null, rid, t.id]);
+          [better, words(better), squash(unshield(it.why)).slice(0, 400) || null, rid, t.id]);
         let i = 0;
         for (const p of (Array.isArray(it.pairs) ? it.pairs : []).slice(0, 6)) {
           if (!isObj(p)) continue;
-          const said = squash(p.said), term = squash(p.term);
+          const said = squash(unshield(p.said)), term = squash(unshield(p.term));
           if (said && term && said.toLowerCase() !== term.toLowerCase()) {
             con.run('INSERT INTO pairs(turn_id,i,said,term,gloss) VALUES(?,?,?,?,?)',
-              [t.id, i, said.slice(0, 300), term.slice(0, 120), squash(p.gloss).slice(0, 300) || null]);
+              [t.id, i, said.slice(0, 300), term.slice(0, 120), squash(unshield(p.gloss)).slice(0, 300) || null]);
             i += 1;
           }
         }
@@ -713,7 +725,7 @@ function applyReview(con, rid, sid, chunk, data) {
       }
       done += 1;
     }
-    const title = squash(data.title).slice(0, 80);
+    const title = squash(unshield(data.title)).slice(0, 80);
     if (title) con.run("UPDATE sessions SET title=?, title_src='coach' WHERE id=? AND title_src IN ('first','coach')", [title, sid]);
     rebuildGlossary(con, sid);
     bump(con);
@@ -2126,6 +2138,17 @@ async function cmdRemove(purge) {
   return 0;
 }
 
+/** What `claude --help` prints, or '' when it cannot be read. */
+function claudeHelp(exe) {
+  try {
+    const opts = { encoding: 'utf8', timeout: 15000, windowsHide: true };
+    const p = IS_WIN && /\.(cmd|bat)$/i.test(exe) ? cp.spawnSync('"' + exe + '" --help', Object.assign({ shell: true }, opts)) : cp.spawnSync(exe, ['--help'], opts);
+    return String(p.stdout || '') + String(p.stderr || '');
+  } catch (e) {
+    return '';
+  }
+}
+
 async function cmdDoctor(call) {
   const cfg = loadConfig();
   let ok = true;
@@ -2158,6 +2181,11 @@ async function cmdDoctor(call) {
   line(fs.existsSync(skill), '/getfarman command: ' + (fs.existsSync(skill) ? skill : 'not installed'));
   const exe = cfg.claude && fs.existsSync(cfg.claude) ? cfg.claude : which('claude');
   line(Boolean(exe), 'claude command: ' + (exe || 'not found. Run: getfarman config claude /path/to/claude'));
+  if (exe) {
+    const help = claudeHelp(exe);
+    const can = help.includes('--tools') && help.includes('--strict-mcp-config');
+    if (help) line(can, 'Reviewer lock: ' + (can ? 'this claude can run with its tools and MCP servers switched off' : 'this claude cannot switch its tools off, so reviews will not run. Update Claude Code'));
+  }
   const info = await serverInfo();
   console.log('  ' + (info ? '--   The page is at http://127.0.0.1:' + info.port + '/' : '--   The page is not open. Run: getfarman open'));
   try { console.log('  --   Mode: ' + statusLine(cfg)); } catch (e) { /* the database line said why */ }
@@ -2325,5 +2353,5 @@ if (require.main === module) {
     });
 } else {
   module.exports = { VERSION, HOME, connect, applyReview, words, firstLine, ownText, sessionTimes, bump, cleanConfig, hookCommand, editSettings,
-    hooksRegistered, parseTranscript, termUsed, shortenPath, winUserPath, profileLine, termMatcher, termUptake };
+    hooksRegistered, parseTranscript, termUsed, shortenPath, winUserPath, profileLine, termMatcher, termUptake, buildUser, callClaude, reviewerPrompt };
 }
