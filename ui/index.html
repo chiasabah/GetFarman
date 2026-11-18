@@ -235,6 +235,8 @@ button.sidebar-heading:hover{color:var(--ink)}
 .strip-selection{margin-left:auto}
 .filter-tag{border:1px solid var(--line-2);background:none;border-radius:99px;padding:2px 10px;font-size:12.5px;color:var(--ink);white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
 .notice{padding:8px 24px;color:var(--muted);border-bottom:1px dashed var(--line-2)}
+.update-notice{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 24px;color:var(--ink)}
+.update-actions{display:inline-flex;gap:18px}
 .notice code,.empty-state code{font:inherit;background:color-mix(in srgb,var(--ink) 7%,transparent);border-radius:5px;padding:1px 6px}
 
 /* headings inside the list */
@@ -960,10 +962,21 @@ function renderStrip(){        // appears only while a filter narrows the list o
   el.hidden=!(left||right);
   el.innerHTML=(left?'<span class="strip-filters">'+left+'</span>':'')+(right?'<span class="strip-selection">'+right+'</span>':'');
 }
+/* A newer GetFarman on npm: say so on every view, with the command to run. "Not now" hides it until the next version. */
+const UPDATE_KEY='getfarman.update.later';
+function updateNotice(){
+  const u=ov&&ov.update; if(!u||!u.available||!u.latest) return '';
+  let later=''; try{ later=localStorage.getItem(UPDATE_KEY)||''; }catch(e){}
+  if(later===u.latest) return '';
+  return '<p class="notice update-notice"><span><b>GetFarman '+esc(u.latest)+' is available.</b> You have '+esc(u.current)+'. To install it, run <code>'+esc(u.command)+'</code> in a terminal.</span>'+
+    '<span class="update-actions"><button class="text-button" data-act="copy-update" data-fid="update-copy">'+(state.copied==='upd'?'Copied':'Copy the command')+'</button>'+
+    '<button class="text-button" data-act="update-later" data-fid="update-later" title="Hide this until the next version">Not now</button></span></p>';
+}
 function renderTable(){
   renderHeads(); renderStrip();
   $('#notices').innerHTML=
     (ov&&older(ov.version,NEEDS)?'<p class="notice">GetFarman was updated, but the server behind this page still runs the old version. <button class="text-button" data-act="shutdown" data-fid="notice-stop">Stop the server</button>, then run <code>getfarman open</code> again.</p>':'')+
+    updateNotice()+
     (ov&&ov.config.mode==='off'?'<p class="notice">The coach is off, so new prompts are not logged. What is already here stays.</p>':'')+
     (ov&&ov.last_review&&ov.last_review.status==='failed'?'<p class="notice">The last review failed: '+esc(ov.last_review.error||'unknown reason')+'</p>':'');
   renderLocation();
@@ -1097,6 +1110,8 @@ document.addEventListener('click',e=>{
     case 'review-scope': review({pending:scoped()}); return;
     case 'copy': { const t=byId(id); if(t) copy(t.better,'c:'+id); return; }
     case 'copy-config': copy(cfgText(c),'cfg'); return;
+    case 'copy-update': if(ov&&ov.update) copy(ov.update.command,'upd'); return;
+    case 'update-later': try{ localStorage.setItem(UPDATE_KEY,ov&&ov.update?ov.update.latest:''); }catch(e){} render(); return;
     case 'mode': setConfig({mode:d.m}); return;
     case 'model': setConfig({model:d.m}); return;
     case 'step': setConfig({every:c.every+Number(d.d)}); return;

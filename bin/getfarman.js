@@ -14,7 +14,7 @@ const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
 const SELF = __filename;
-let VERSION = '0.1.3';
+let VERSION = '0.1.4';
 try { VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version || VERSION; } catch (e) { /* keep the default */ }
 const SCHEMA_VERSION = 3;
 
@@ -28,6 +28,8 @@ const SERVERFILE = path.join(HOME, 'server.json');
 const WORK = path.join(HOME, 'work');
 const PROMPTFILE = path.join(HOME, 'reviewer_prompt.txt');   // your own reviewer instructions, when you edit them
 const INSTALLED = path.join(HOME, 'app', 'bin', 'getfarman.js');
+const UPDATEFILE = path.join(HOME, 'update.json');           // what the last look at the npm registry found
+const REGISTRY = (process.env.GETFARMAN_REGISTRY || 'https://registry.npmjs.org').replace(/\/+$/, '');
 const IS_WIN = process.platform === 'win32';
 
 const DEFAULTS = {
@@ -39,6 +41,7 @@ const DEFAULTS = {
   port: 4777,
   idle_minutes: 30,         // the page's server stops after this long unused
   claude: '',               // path to the claude command; found on PATH if empty
+  update_check: true,       // look at the npm registry, at most once a day, for a newer GetFarman
 };
 const MODES = ['automatic', 'by_hand', 'off'];
 const CHUNK = 12;           // prompts per reviewer call
@@ -235,6 +238,7 @@ function cleanConfig(cfg) {
   const send = Array.isArray(out.send) ? out.send : [];
   out.send = ['reply', 'files'].filter(x => send.includes(x));
   out.claude = String(out.claude || '');
+  out.update_check = !['false', 'off', 'no', '0'].includes(String(out.update_check).trim().toLowerCase());
   return out;
 }
 
@@ -1361,7 +1365,7 @@ function apiOverview(con, P) {
   }
   const last = con.get('SELECT r.*, s.title AS title FROM reviews r JOIN sessions s ON s.id=r.session_id ORDER BY r.id DESC LIMIT 1');
   return {
-    version: VERSION, home: HOME, home_short: tilde(HOME),
+    version: VERSION, home: HOME, home_short: tilde(HOME), update: updateSnapshot(false),
     config: { mode: cfg.mode, every: cfg.every, model: cfg.model, send: cfg.send, reply_chars: cfg.reply_chars, idle_minutes: cfg.idle_minutes },
     custom_prompt: reviewerGuide()[1],
     stamp: metaGet(con, 'stamp', '0'), counts, sessions, projects, where,
@@ -1743,8 +1747,16 @@ async function cmdServe(port, wait) {
   const at = server.address().port;
   fs.writeFileSync(SERVERFILE, JSON.stringify({ pid: process.pid, port: at, started: now() }));
   const made = fs.statSync(SELF).mtimeMs;
+  let looking = false;
+  const look = () => {       // at most one look at a time, and refreshUpdate itself waits a day between looks
+    if (looking) return;
+    looking = true;
+    refreshUpdate(false, false).catch(() => {}).then(() => { looking = false; });
+  };
+  look();
   const bye = () => { fs.rmSync(SERVERFILE, { force: true }); process.exit(0); };
   setInterval(() => {
+    look();
     if (now() - seen > cfg.idle_minutes * 60) {
       log("the page's server stopped after " + cfg.idle_minutes + ' idle minutes');
       bye();
@@ -1992,6 +2004,125 @@ function unregisterCommand(dir) {
   return profileFiles().map(f => profileLine(dir, false, f)).includes('removed') ? 'removed' : 'absent';
 }
 
+// ---------------------------------------------------------------- updates
+
+const PLAIN_VERSION = /^\d+\.\d+\.\d+$/;
+
+/** True when version a is newer than version b. Anything that is not three plain numbers is never newer. */
+function newer(a, b) {
+  if (!PLAIN_VERSION.test(String(a)) || !PLAIN_VERSION.test(String(b))) return false;
+  const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i];
+  return false;
+}
+
+function readUpdate() {
+  try { const c = JSON.parse(fs.readFileSync(UPDATEFILE, 'utf8')); return isObj(c) ? c : {}; } catch (e) { return {}; }
+}
+
+/** What is known about updates right now, from the saved result of the last look. No network. */
+function updateSnapshot(explicit) {
+  const off = !explicit && (!loadConfig().update_check || Boolean(process.env.GETFARMAN_NO_UPDATE_CHECK));
+  const c = readUpdate();
+  const latest = PLAIN_VERSION.test(String(c.latest || '')) ? c.latest : null;
+  return { current: VERSION, latest, available: Boolean(!off && latest && newer(latest, VERSION)), checked_at: Number(c.checked_at) || null,
+    error: c.error || null, off, command: 'getfarman update' };
+}
+
+/** Ask the npm registry for the latest version. It sends nothing but the package name, and it never throws. */
+async function askRegistry() {
+  try {
+    const res = await fetch(REGISTRY + '/getfarman/latest', { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return { error: 'the registry answered ' + res.status };
+    const v = String((await res.json()).version || '');
+    return PLAIN_VERSION.test(v) ? { latest: v } : { error: 'the registry gave no usable version' };
+  } catch (e) {
+    return { error: e && e.name === 'TimeoutError' ? 'the registry did not answer in time' : 'the registry could not be reached' };
+  }
+}
+
+/** Look at the registry when the saved result is old: a day after an answer, an hour after a failure. */
+async function refreshUpdate(explicit, force) {
+  const snap = updateSnapshot(explicit);
+  if (snap.off) return snap;
+  const c = readUpdate();
+  const age = now() - (Number(c.checked_at) || 0);
+  if (!force && age >= 0 && age < (c.error ? 3600 : 86400)) return snap;
+  const r = await askRegistry();
+  try {
+    fs.mkdirSync(HOME, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(UPDATEFILE, JSON.stringify({ checked_at: now(), latest: r.latest || (PLAIN_VERSION.test(String(c.latest || '')) ? c.latest : null), error: r.error || null }) + '\n');
+  } catch (e) { /* the next start looks again */ }
+  return updateSnapshot(explicit);
+}
+
+function askYes(question) {
+  return new Promise(resolve => {
+    const rl = require('readline').createInterface({ input: process.stdin, output: process.stdout });
+    rl.on('close', () => resolve(false));
+    rl.question(question, answer => { resolve(/^y(es)?$/i.test(answer.trim())); rl.close(); });
+  });
+}
+
+/** Run a command of the installed copy in this terminal and return its exit code. */
+function runInstalled(args) {
+  const p = cp.spawnSync(process.execPath, [INSTALLED].concat(args), { stdio: 'inherit', env: Object.assign({}, process.env, { GETFARMAN_NO_UPDATE_CHECK: '1' }) });
+  return p.status === null ? 1 : p.status;
+}
+
+/** getfarman update: install the latest version from npm. With --check it only says what it found. */
+async function cmdUpdate(rest) {
+  const u = await refreshUpdate(true, true);
+  if (u.error && !u.latest) {
+    console.log('GetFarman could not check for updates: ' + u.error + '.');
+    return 1;
+  }
+  if (!newer(u.latest, VERSION)) {
+    console.log('GetFarman ' + VERSION + ' is up to date.' + (u.error ? ' (The last look failed: ' + u.error + '.)' : ''));
+    return 0;
+  }
+  console.log('GetFarman ' + u.latest + ' is available. You have ' + VERSION + '.');
+  if (rest.includes('--check')) {
+    console.log('To install it, run: getfarman update');
+    return 0;
+  }
+  const byHand = 'npx getfarman@latest';
+  const npx = which('npx');
+  if (!npx) {
+    console.log('The npx command was not found, so GetFarman cannot install it for you. Install Node with npm, then run: ' + byHand);
+    return 1;
+  }
+  // The version comes from the registry, so it is checked to be three plain numbers before it goes into a command.
+  const line = 'npx --yes getfarman@' + u.latest + ' setup --no-history';
+  console.log('Running: ' + line);
+  const p = cp.spawnSync(line, { shell: true, stdio: 'inherit', env: Object.assign({}, process.env, { GETFARMAN_NO_UPDATE_CHECK: '1' }) });
+  const have = installedVersion();
+  if (p.status !== 0 || have !== u.latest) {
+    console.log('The update did not finish' + (have ? ', and the installed copy is still ' + have : '') + '. Run it yourself: ' + byHand);
+    return 1;
+  }
+  console.log('GetFarman is now ' + have + '.');
+  return 0;
+}
+
+/** When a newer version is known, say so. In a terminal with a person at it, ask whether to install it now. */
+async function offerUpdate(rest) {
+  if (rest.includes('--no-update')) return false;
+  const person = Boolean(process.stdin.isTTY && process.stdout.isTTY && !process.env.CI);
+  if (!person) {
+    refreshUpdate(false, false).catch(() => {});      // keep the page's notice fresh, and print nothing into a script's output
+    return false;
+  }
+  const u = await refreshUpdate(false, false);
+  if (!u.available) return false;
+  console.log('GetFarman ' + u.latest + ' is available. You have ' + u.current + '.');
+  if (!(await askYes('Install it now? (y/n) '))) {
+    console.log('Not now. To install it later, run: getfarman update\n');
+    return false;
+  }
+  return (await cmdUpdate([])) === 0;
+}
+
 function installedVersion() {
   try { return JSON.parse(fs.readFileSync(path.join(HOME, 'app', 'package.json'), 'utf8')).version || ''; } catch (e) { return ''; }
 }
@@ -2187,6 +2318,9 @@ async function cmdDoctor(call) {
     if (help) line(can, 'Reviewer lock: ' + (can ? 'this claude can run with its tools and MCP servers switched off' : 'this claude cannot switch its tools off, so reviews will not run. Update Claude Code'));
   }
   const info = await serverInfo();
+  const upd = await refreshUpdate(false, false);
+  console.log('  --   Updates: ' + (upd.off ? 'the check is switched off' : upd.available ? upd.latest + ' is available. Run: getfarman update'
+    : upd.latest ? 'up to date' : 'not checked yet' + (upd.error ? ' (' + upd.error + ')' : '')));
   console.log('  ' + (info ? '--   The page is at http://127.0.0.1:' + info.port + '/' : '--   The page is not open. Run: getfarman open'));
   try { console.log('  --   Mode: ' + statusLine(cfg)); } catch (e) { /* the database line said why */ }
   if (call && exe) {
@@ -2221,9 +2355,11 @@ const USAGE = `GetFarman ${VERSION}. A sidecar prompt coach for Claude Code.
   getfarman forget OPTION     --all | --session ID | --older-than DAYS
   getfarman doctor [--call]   check the installation; --call also tries one review
   getfarman stop              stop the page's server
+  getfarman update [--check]  install the latest version from npm; --check only says whether there is one
   getfarman setup             install or update: the hooks, the /getfarman command, the app and the getfarman command on your PATH
   getfarman remove [--purge]  uninstall; --purge also deletes the log
   getfarman config KEY VALUE  set a config.json key, for example: config claude /path
+                              config update_check off stops the daily look at npm for a new version
 `;
 
 const after = (rest, flag) => (rest.includes(flag) && rest.indexOf(flag) + 1 < rest.length ? rest[rest.indexOf(flag) + 1] : '');
@@ -2239,14 +2375,19 @@ async function main(argv) {
   if (cmd === 'start') {
     // npx getfarman: make sure the installed copy, the hooks and the /getfarman command are in place, then open the page.
     const settled = path.resolve(SELF) === path.resolve(INSTALLED);
-    const ready = fs.existsSync(INSTALLED) && installedVersion() === VERSION && hooksRegistered(path.join(claudeDir(), 'settings.json')).length === 3;
+    const have = installedVersion();
+    // An older copy can be started by accident, for example from npx's cache. It must not replace a newer installed one.
+    if (!settled && fs.existsSync(INSTALLED) && newer(have, VERSION)) return runInstalled(rest);
+    const ready = fs.existsSync(INSTALLED) && have === VERSION && hooksRegistered(path.join(claudeDir(), 'settings.json')).length === 3;
     if (!settled && !ready) {
       const rc = cmdSetup(!rest.includes('--no-history'), rest.includes('--no-path'));
       if (rc) return rc;
       console.log('');
     }
+    if (await offerUpdate(rest)) return runInstalled(['open'].concat(rest.includes('--no-browser') ? ['--no-browser'] : []));
     return cmdOpen(!rest.includes('--no-browser'));
   }
+  if (cmd === 'update') return cmdUpdate(rest);
   if (cmd === 'setup') return cmdSetup(!rest.includes('--no-history'), rest.includes('--no-path'));
   if (cmd === 'remove') return cmdRemove(rest.includes('--purge'));
   if (cmd === 'review-run') {
@@ -2259,7 +2400,10 @@ async function main(argv) {
   }
   if (cmd === 'import') return cmdImport(/^\d+$/.test(after(rest, '--days')) ? parseInt(after(rest, '--days'), 10) : null, rest.includes('--quiet'));
   if (cmd === 'serve') return cmdServe(/^\d+$/.test(after(rest, '--port')) ? parseInt(after(rest, '--port'), 10) : null, rest.includes('--wait'));
-  if (cmd === 'open') return cmdOpen(!rest.includes('--no-browser'));
+  if (cmd === 'open') {
+    if (await offerUpdate(rest)) return runInstalled(['open'].concat(rest.includes('--no-browser') ? ['--no-browser'] : []));
+    return cmdOpen(!rest.includes('--no-browser'));
+  }
   if (cmd === 'stop') return cmdStop();
   if (cmd === 'doctor') return cmdDoctor(rest.includes('--call'));
   let cfg = loadConfig();
@@ -2353,5 +2497,5 @@ if (require.main === module) {
     });
 } else {
   module.exports = { VERSION, HOME, connect, applyReview, words, firstLine, ownText, sessionTimes, bump, cleanConfig, hookCommand, editSettings,
-    hooksRegistered, parseTranscript, termUsed, shortenPath, winUserPath, profileLine, termMatcher, termUptake, buildUser, callClaude, reviewerPrompt };
+    hooksRegistered, parseTranscript, termUsed, shortenPath, winUserPath, profileLine, termMatcher, termUptake, buildUser, callClaude, reviewerPrompt, newer, updateSnapshot, refreshUpdate };
 }

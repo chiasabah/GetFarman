@@ -94,6 +94,7 @@ getfarman glossary [ID]     the terms taught, for one session id or for all
 getfarman forget OPTION     --all | --session ID | --older-than DAYS
 getfarman doctor [--call]   check the installation; --call also tries one review
 getfarman stop              stop the page's server
+getfarman update [--check]  install the latest version from npm; --check only says whether there is one
 getfarman setup             install or update: the hooks, the /getfarman command and the app
 getfarman remove [--purge]  uninstall; --purge also deletes the log
 ```
@@ -133,6 +134,7 @@ The list draws only the rows near the window, so a log of many thousands of prom
 ~/.getfarman/
   getfarman.db           the log (SQLite)
   config.json           settings; the hooks read it at every prompt
+  update.json           what the last look at the npm registry found
   getfarman.log          what the hooks and reviews did, and any errors
   reviewer_prompt.txt   your own reviewer instructions, once you edit them on the page
   app/bin/getfarman.js   the whole engine
@@ -157,6 +159,7 @@ Query it yourself with `sqlite3 ~/.getfarman/getfarman.db`.
 
 - Your prompts and the ends of Claude's replies are stored in plain text in `~/.getfarman/getfarman.db`, readable only by your user. They leave your machine only when a review sends them to Claude through your own `claude` login.
 - The page answers on `127.0.0.1` only and needs a key that only the page itself carries.
+- Once a day GetFarman asks the npm registry which version is the latest. The request carries the package name and nothing from your log. `getfarman config update_check off` stops it.
 - The reviewer runs with its tools and its MCP servers switched off. Text from your log is escaped before it is sent. So an instruction inside a pasted page cannot make the reviewer read or change anything on your computer.
 - A review is one small call for up to 12 prompts. Reviewing 300 prompts is about 25 calls.
 - `getfarman forget --all` empties the log.
@@ -183,6 +186,7 @@ getfarman remove --purge   # also deletes the log and settings
 |---|---|
 | Nothing is logged | `getfarman doctor`. If the hooks are listed, restart Claude Code. Check `getfarman status` is not "off". |
 | "This version of claude does not know `--tools`" | Update Claude Code, then press "Review now". GetFarman runs a review only when the reviewer's tools can be switched off. |
+| "The update did not finish" | Run `npx getfarman@latest` yourself. It installs the latest version and keeps your log. |
 | "The last review failed" | The reason is on the page and in `getfarman status`. A login problem needs `claude` to work in a terminal first; then press "Review now". |
 | `/getfarman` reaches Claude | The hook did not run. `getfarman doctor`, then run `getfarman setup`. |
 | A hook error after a Node update | Run `getfarman setup`. It records the new path to Node. |

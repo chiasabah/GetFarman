@@ -39,6 +39,7 @@ The screenshots on this page show sample data.
   - [Settings](#settings)
   - [Dark theme](#dark-theme)
 - [Install](#install)
+- [Updates](#updates)
 - [Commands](#commands)
 - [Privacy](#privacy)
 - [Licence](#licence)
@@ -191,6 +192,18 @@ Then check the install.
 ```sh
 getfarman doctor --call
 ```
+
+## Updates
+
+GetFarman asks the npm registry which version is the latest, at most once a day. The request carries the package name and nothing from your log.
+
+When a newer version exists, you hear about it in two places. Typing `getfarman` in a terminal tells you and asks whether to install it. You answer y or n. The page shows a notice with the command to run.
+
+```sh
+getfarman update
+```
+
+To stop the daily look, run `getfarman config update_check off`.
 
 ## Commands
 

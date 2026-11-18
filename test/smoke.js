@@ -13,7 +13,7 @@ const box = fs.mkdtempSync(path.join(os.tmpdir(), 'getfarman-test-'));
 const home = path.join(box, '.getfarman');
 const claude = path.join(box, '.claude');
 // GETFARMAN_NO_PATH keeps setup and remove away from your real PATH.
-const env = Object.assign({}, process.env, { GETFARMAN_HOME: home, CLAUDE_CONFIG_DIR: claude, USERPROFILE: box, HOME: box, GETFARMAN_NO_PATH: '1' });
+const env = Object.assign({}, process.env, { GETFARMAN_HOME: home, CLAUDE_CONFIG_DIR: claude, USERPROFILE: box, HOME: box, GETFARMAN_NO_PATH: '1', GETFARMAN_NO_UPDATE_CHECK: '1' });
 delete env.GETFARMAN_REVIEWER;
 const PORT = 4791;
 
@@ -141,6 +141,7 @@ const ok = name => console.log('  ok   ' + (++step) + '. ' + name);
   const H = { 'X-GetFarman-Token': token };
   const ov = JSON.parse((await get('/api/overview?group=project', H)).text);
   assert.strictEqual(ov.all.n, 3);
+  assert.strictEqual(ov.update.available, false);
   assert.strictEqual(ov.all.sessions, 2);
   assert.deepStrictEqual(ov.counts, { better: 1, precise: 0, pending: 2 });
   assert.strictEqual(ov.projects[0].name, 'shop');
@@ -253,6 +254,82 @@ const ok = name => console.log('  ok   ' + (++step) + '. ' + name);
   assert.deepStrictEqual(Object.values(con3.get('SELECT said, term FROM pairs WHERE turn_id=?', [t2.id])), ['the <div> box', '<div>']);
   con3.close();
   ok('the reviewer\'s answer is stored with the plain characters again');
+
+  // updates: a fake registry on this computer says which version is the latest
+  assert.ok(F.newer('0.1.10', '0.1.9') && F.newer('0.2.0', '0.1.9') && F.newer('1.0.0', '0.9.9'));
+  assert.ok(!F.newer('0.1.4', '0.1.4') && !F.newer('0.1.3', '0.1.4') && !F.newer('0.0.0-stage', '0.0.0') && !F.newer('9.9.9; rm -rf /', '0.1.0') && !F.newer('abc', '0.1.0'));
+  let regMode = 'newer', regHits = 0;
+  const registry = http.createServer((req, res) => {
+    regHits += 1;
+    assert.strictEqual(req.url, '/getfarman/latest');
+    const body = { newer: '{"version":"9.9.9"}', same: JSON.stringify({ version: F.VERSION }), older: '{"version":"0.0.1"}',
+      bad: 'this is not json', evil: '{"version":"9.9.9; rm -rf /"}', pre: '{"version":"9.9.9-beta.1"}' }[regMode];
+    res.writeHead(regMode === 'error' ? 503 : 200, { 'Content-Type': 'application/json' });
+    res.end(body || '{}');
+  });
+  await new Promise(r => registry.listen(PORT + 1, '127.0.0.1', r));
+  const env2 = Object.assign({}, env, { GETFARMAN_REGISTRY: 'http://127.0.0.1:' + (PORT + 1) });
+  delete env2.GETFARMAN_NO_UPDATE_CHECK;
+  const run2 = (args, e) => new Promise(resolve => {       // not spawnSync: the fake registry lives in this process
+    const child = cp.spawn(process.execPath, [BIN].concat(args), { env: e || env2 });
+    let out = '';
+    child.stdout.on('data', d => { out += d; });
+    child.stderr.on('data', d => { out += d; });
+    child.on('close', status => resolve({ status, out }));
+  });
+  const saved = () => JSON.parse(fs.readFileSync(path.join(home, 'update.json'), 'utf8'));
+  r = await run2(['update', '--check']);
+  assert.ok(r.status === 0 && r.out.includes('GetFarman 9.9.9 is available. You have ' + F.VERSION) && r.out.includes('getfarman update'), r.out);
+  assert.strictEqual(saved().latest, '9.9.9');
+  for (const [mode, says] of [['same', 'is up to date'], ['older', 'is up to date']]) {
+    regMode = mode;
+    r = await run2(['update', '--check']);
+    assert.ok(r.status === 0 && r.out.includes(says), mode + ': ' + r.out);
+  }
+  fs.rmSync(path.join(home, 'update.json'));
+  for (const mode of ['bad', 'evil', 'pre', 'error']) {        // nothing usable comes back: say so, keep going, store no odd version
+    regMode = mode;
+    r = await run2(['update', '--check']);
+    assert.ok(r.status === 1 && r.out.includes('could not check for updates'), mode + ': ' + r.out);
+    assert.strictEqual(saved().latest, null, mode);
+  }
+  r = await run2(['update', '--check'], Object.assign({}, env2, { GETFARMAN_REGISTRY: 'http://127.0.0.1:9' }));     // nothing listens there
+  assert.ok(r.status === 1 && r.out.includes('could not check for updates'), r.out);
+  ok('the update check copes with a newer, equal, older, broken, hostile and unreachable registry');
+
+  regMode = 'newer';
+  fs.rmSync(path.join(home, 'update.json'), { force: true });
+  let before = regHits;
+  r = await run2(['doctor']);
+  assert.ok(r.out.includes('Updates: 9.9.9 is available. Run: getfarman update'), r.out);
+  r = await run2(['doctor']);
+  assert.strictEqual(regHits, before + 1, 'a second look within a day must use the saved answer');
+  assert.strictEqual((await run2(['config', 'update_check', 'off'])).status, 0);
+  fs.rmSync(path.join(home, 'update.json'));
+  r = await run2(['doctor']);
+  assert.ok(r.out.includes('Updates: the check is switched off') && regHits === before + 1, r.out);
+  assert.strictEqual((await run2(['config', 'update_check', 'on'])).status, 0);
+  r = await run2(['doctor'], Object.assign({}, env2, { GETFARMAN_NO_UPDATE_CHECK: '1' }));
+  assert.ok(r.out.includes('the check is switched off') && regHits === before + 1, r.out);
+  ok('the registry is asked at most once a day, and not at all when the check is off');
+
+  const server2 = cp.spawn(process.execPath, [BIN, 'serve', '--port', String(PORT + 2)], { env: env2, stdio: 'ignore' });
+  let ov2 = null;
+  for (let i = 0; i < 40 && !(ov2 && ov2.update.available); i++) {
+    await sleep(150);
+    ov2 = await new Promise(resolve => {
+      http.get('http://127.0.0.1:' + (PORT + 2) + '/api/overview', { headers: { 'X-GetFarman-Token': token } }, res => {
+        let text = '';
+        res.on('data', d => { text += d; });
+        res.on('end', () => { try { resolve(JSON.parse(text)); } catch (e) { resolve(null); } });
+      }).on('error', () => resolve(null));
+    });
+  }
+  assert.deepStrictEqual([ov2.update.available, ov2.update.latest, ov2.update.current, ov2.update.command], [true, '9.9.9', F.VERSION, 'getfarman update']);
+  server2.kill();
+  fs.rmSync(path.join(home, 'server.json'), { force: true });
+  registry.close();
+  ok('the page is told about a newer version and the command that installs it');
 
   // 6. remove takes our hooks out and keeps the log and the other hook
   r = run(['remove']);
