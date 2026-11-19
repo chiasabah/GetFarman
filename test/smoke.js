@@ -8,7 +8,7 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 
-const BIN = path.resolve(__dirname, '..', 'bin', 'getfarman.js');
+const BIN = path.resolve(__dirname, '..', 'cli', 'getfarman.js');
 const box = fs.mkdtempSync(path.join(os.tmpdir(), 'getfarman-test-'));
 const home = path.join(box, '.getfarman');
 const claude = path.join(box, '.claude');
@@ -330,6 +330,64 @@ const ok = name => console.log('  ok   ' + (++step) + '. ' + name);
   fs.rmSync(path.join(home, 'server.json'), { force: true });
   registry.close();
   ok('the page is told about a newer version and the command that installs it');
+
+  // the plugin: its files agree with each other and with the package
+  const REPO = path.resolve(__dirname, '..');
+  const readJson = f => JSON.parse(fs.readFileSync(path.join(REPO, f), 'utf8'));
+  const man = readJson('.claude-plugin/plugin.json'), pkg = readJson('package.json'), mkt = readJson('.claude-plugin/marketplace.json');
+  assert.strictEqual(man.name, 'getfarman');
+  assert.strictEqual(man.version, pkg.version, 'plugin.json and package.json must carry the same version');
+  assert.strictEqual(man.version, F.VERSION);
+  assert.ok(fs.existsSync(path.join(REPO, man.icon)) && man.icon.endsWith('.png'), 'the icon must be a PNG inside the plugin');
+  assert.deepStrictEqual([mkt.plugins.length, mkt.plugins[0].name, mkt.plugins[0].source], [1, 'getfarman', './']);
+  assert.ok(!fs.existsSync(path.join(REPO, 'bin')), 'a top-level bin folder stops claude.ai and Cowork from installing the plugin');
+  const hooksJson = readJson('hooks/hooks.json').hooks;
+  assert.deepStrictEqual(Object.keys(hooksJson).sort(), ['PostToolUse', 'Stop', 'UserPromptSubmit']);
+  for (const groups of Object.values(hooksJson)) {
+    for (const h of groups[0].hooks) {
+      assert.deepStrictEqual([h.command, h.args], ['node', ['${CLAUDE_PLUGIN_ROOT}/cli/getfarman.js', 'hook']]);
+    }
+  }
+  assert.ok(fs.existsSync(path.join(REPO, 'cli', 'getfarman.js')));
+  for (const c of ['open', 'now', 'status', 'mode']) {
+    assert.ok(/^---\ndescription: .+\n[\s\S]*disable-model-invocation: true\n---\n/.test(fs.readFileSync(path.join(REPO, 'commands', c + '.md'), 'utf8')), c);
+  }
+  ok('the plugin manifest, marketplace, hooks, commands and icon agree');
+
+  // the engine run as a plugin: Claude Code sets CLAUDE_PLUGIN_ROOT to the plugin's folder
+  const pbox = fs.mkdtempSync(path.join(os.tmpdir(), 'getfarman-plugin-'));
+  const penv = Object.assign({}, env, { GETFARMAN_HOME: path.join(pbox, '.getfarman'), CLAUDE_CONFIG_DIR: path.join(pbox, '.claude'),
+    CLAUDE_PLUGIN_ROOT: REPO, USERPROFILE: pbox, HOME: pbox });
+  delete penv.GETFARMAN_NO_UPDATE_CHECK;
+  penv.GETFARMAN_REGISTRY = 'http://127.0.0.1:9';     // were it asked, nothing would answer, and the doctor would say so
+  const prun = (args, input) => cp.spawnSync(process.execPath, [BIN].concat(args), { env: penv, input, encoding: 'utf8', timeout: 20000 });
+  const phook = ev => prun(['hook'], JSON.stringify(ev));
+  const pcount = () => { const c = new (require('node:sqlite').DatabaseSync)(path.join(pbox, '.getfarman', 'getfarman.db')); const v = c.prepare('SELECT COUNT(*) AS n FROM turns').get().n; c.close(); return v; };
+  r = phook({ hook_event_name: 'UserPromptSubmit', session_id: 'pl1', prompt_id: 'q1', cwd, prompt: 'make the box wider' });
+  assert.strictEqual(r.status, 0);
+  assert.strictEqual(r.stdout + r.stderr, '');
+  assert.strictEqual(pcount(), 1);
+  for (const [typed, says] of [['/getfarman:status', 'Farman: automatic'], ['/getfarman:mode hand', 'Farman: by hand'], ['/getfarman status', 'Farman: by hand']]) {
+    r = phook({ hook_event_name: 'UserPromptSubmit', session_id: 'pl1', prompt: typed });
+    assert.ok(r.status === 2 && r.stderr.startsWith('Get' + says), typed + ': ' + r.stderr);
+  }
+  r = prun(['doctor']);
+  assert.ok(r.stdout.includes('Updates: the check is switched off'), r.stdout);
+  ok('as a plugin it logs, answers /getfarman:<command> and never asks npm for a new version');
+
+  // installed both ways: the settings.json hooks log, the plugin's hooks step aside except for /getfarman:<command>
+  fs.mkdirSync(path.join(pbox, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(pbox, '.claude', 'settings.json'), JSON.stringify({ hooks: {
+    UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'node "/x/getfarman.js" hook' }] }],
+    Stop: [{ hooks: [{ type: 'command', command: 'node "/x/getfarman.js" hook' }] }] } }));
+  r = phook({ hook_event_name: 'UserPromptSubmit', session_id: 'pl1', prompt_id: 'q2', cwd, prompt: 'make the box taller' });
+  assert.strictEqual(pcount(), 1, 'the plugin hook must not log when the settings.json hooks are there');
+  r = phook({ hook_event_name: 'UserPromptSubmit', session_id: 'pl1', prompt: '/getfarman status' });
+  assert.strictEqual(r.status, 0, 'the plain /getfarman form belongs to the settings.json hook');
+  r = phook({ hook_event_name: 'UserPromptSubmit', session_id: 'pl1', prompt: '/getfarman:status' });
+  assert.strictEqual(r.status, 2, 'the plugin still answers its own commands');
+  fs.rmSync(pbox, { recursive: true, force: true });
+  ok('installed both ways, every prompt is logged once');
 
   // 6. remove takes our hooks out and keeps the log and the other hook
   r = run(['remove']);

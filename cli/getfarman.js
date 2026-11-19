@@ -14,7 +14,7 @@ const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
 const SELF = __filename;
-let VERSION = '0.1.4';
+let VERSION = '0.1.5';
 try { VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version || VERSION; } catch (e) { /* keep the default */ }
 const SCHEMA_VERSION = 3;
 
@@ -31,6 +31,11 @@ const INSTALLED = path.join(HOME, 'app', 'bin', 'getfarman.js');
 const UPDATEFILE = path.join(HOME, 'update.json');           // what the last look at the npm registry found
 const REGISTRY = (process.env.GETFARMAN_REGISTRY || 'https://registry.npmjs.org').replace(/\/+$/, '');
 const IS_WIN = process.platform === 'win32';
+// Installed as a Claude Code plugin, Claude Code runs this file from the plugin's own folder and says where that is.
+// Updates then come through the plugin listing, not from npm, and the hooks come from the plugin, not from settings.json.
+const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT ? path.resolve(process.env.CLAUDE_PLUGIN_ROOT) : '';
+const IN_PLUGIN = Boolean(PLUGIN_ROOT) && (IS_WIN ? SELF.toLowerCase().startsWith(PLUGIN_ROOT.toLowerCase() + path.sep)
+  : SELF.startsWith(PLUGIN_ROOT + path.sep));
 
 const DEFAULTS = {
   mode: 'automatic',        // automatic | by_hand | off
@@ -399,7 +404,7 @@ function firstLine(text, limit = 60) {
 
 /** The copy of this program that stays put: the installed one when there is one. */
 function stableSelf() {
-  return fs.existsSync(INSTALLED) ? INSTALLED : SELF;
+  return !IN_PLUGIN && fs.existsSync(INSTALLED) ? INSTALLED : SELF;
 }
 
 /** Start a detached copy of this program. It outlives the hook that started it. */
@@ -865,7 +870,8 @@ function slash(arg, ev, cfg) {
     } else if (cmd === 'status') {
       out = statusLine(cfg, sid);
     } else {
-      out = 'use /getfarman open, now, status, import, on, hand, off or every N.';
+      out = IN_PLUGIN ? 'use /getfarman:open, /getfarman:now, /getfarman:status or /getfarman:mode on, hand or off.'
+        : 'use /getfarman open, now, status, import, on, hand, off or every N.';
     }
   } catch (e) {
     log('slash command failed: ' + e.message);
@@ -893,6 +899,11 @@ function readStdin() {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+/** True in the plugin's hook when the hooks in settings.json are registered too: they log, so this one does not. */
+function pluginStepsAside() {
+  return IN_PLUGIN && hooksRegistered(path.join(claudeDir(), 'settings.json')).length > 0;
+}
+
 function cmdHook() {
   if (process.env.GETFARMAN_REVIEWER) return 0;
   let ev;
@@ -913,8 +924,15 @@ function cmdHook() {
     const prompt = ev.prompt;
     if (typeof prompt !== 'string') return 0;
     const head = prompt.trim();
-    if (head.slice(0, 10).toLowerCase() === '/getfarman' && (head.length === 10 || /\s/.test(head[10]))) {
-      return slash(head.slice(10).trim(), ev, cfg);
+    const sm = /^\/getfarman(?::([a-z-]+))?(?=\s|$)/i.exec(head);
+    // Installed both ways, Claude Code runs both sets of hooks. The settings.json ones do the logging, and
+    // the plugin's answer only the plugin's own /getfarman:<cmd> commands, so that nothing happens twice.
+    if (IN_PLUGIN && hooksRegistered(path.join(claudeDir(), 'settings.json')).length && !(sm && sm[1])) return 0;
+    if (sm) {
+      const sub = (sm[1] || '').toLowerCase();
+      let arg = head.slice(sm[0].length).trim();
+      if (sub && sub !== 'getfarman' && sub !== 'mode') arg = (sub + ' ' + arg).trim();
+      return slash(arg, ev, cfg);
     }
     if (cfg.mode === 'off' || !head || '/!'.includes(head[0])) return 0;
     const con = connect();
@@ -939,7 +957,7 @@ function cmdHook() {
       con.close();
     }
   } else if (name === 'PostToolUse') {
-    if (cfg.mode === 'off') return 0;
+    if (cfg.mode === 'off' || pluginStepsAside()) return 0;
     const tin = isObj(ev.tool_input) ? ev.tool_input : {};
     const file = tin.file_path || tin.notebook_path;
     if (!file) return 0;
@@ -960,7 +978,7 @@ function cmdHook() {
       con.close();
     }
   } else if (name === 'Stop') {
-    if (cfg.mode === 'off') return 0;
+    if (cfg.mode === 'off' || pluginStepsAside()) return 0;
     const msg = typeof ev.last_assistant_message === 'string' ? ev.last_assistant_message : '';
     const con = connect();
     try {
@@ -2022,7 +2040,7 @@ function readUpdate() {
 
 /** What is known about updates right now, from the saved result of the last look. No network. */
 function updateSnapshot(explicit) {
-  const off = !explicit && (!loadConfig().update_check || Boolean(process.env.GETFARMAN_NO_UPDATE_CHECK));
+  const off = IN_PLUGIN || (!explicit && (!loadConfig().update_check || Boolean(process.env.GETFARMAN_NO_UPDATE_CHECK)));
   const c = readUpdate();
   const latest = PLAIN_VERSION.test(String(c.latest || '')) ? c.latest : null;
   return { current: VERSION, latest, available: Boolean(!off && latest && newer(latest, VERSION)), checked_at: Number(c.checked_at) || null,
@@ -2086,7 +2104,7 @@ async function cmdUpdate(rest) {
     console.log('To install it, run: getfarman update');
     return 0;
   }
-  const byHand = 'npx getfarman@latest';
+  const byHand = 'npx getfarman@' + u.latest;
   const npx = which('npx');
   if (!npx) {
     console.log('The npx command was not found, so GetFarman cannot install it for you. Install Node with npm, then run: ' + byHand);
@@ -2136,8 +2154,11 @@ function cmdSetup(history, noPath) {
     fs.mkdirSync(d, { recursive: true });
   }
   try { fs.chmodSync(HOME, 0o700); } catch (e) { /* not every file system has modes */ }
-  for (const rel of [path.join('bin', 'getfarman.js'), path.join('ui', 'index.html'), path.join('skill', 'SKILL.md'), 'package.json']) {
-    const from = path.resolve(ROOT, rel), to = path.resolve(dstApp, rel);
+  // The engine is copied from the running file, so the installed copy keeps its path, app/bin/getfarman.js,
+  // whatever folder the package keeps it in. Hooks written by earlier versions keep working.
+  const copies = [[SELF, INSTALLED]].concat([path.join('ui', 'index.html'), path.join('skill', 'SKILL.md'), 'package.json']
+    .map(rel => [path.resolve(ROOT, rel), path.resolve(dstApp, rel)]));
+  for (const [from, to] of copies) {
     if (!fs.existsSync(from)) {
       console.log('The package is incomplete: ' + from + ' is missing.');
       return 1;
