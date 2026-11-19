@@ -313,6 +313,36 @@ const ok = name => console.log('  ok   ' + (++step) + '. ' + name);
   assert.ok(r.out.includes('the check is switched off') && regHits === before + 1, r.out);
   ok('the registry is asked at most once a day, and not at all when the check is off');
 
+  // getfarman update runs npx in a folder of its own, never in the folder it was started from
+  const fakeBin = path.join(box, 'fake npx');
+  fs.mkdirSync(fakeBin);
+  const record = path.join(fakeBin, 'ran-in.txt');
+  if (process.platform === 'win32') {
+    fs.writeFileSync(path.join(fakeBin, 'npx.cmd'), '@echo %CD%> "%~dp0ran-in.txt"\r\n@exit /b 1\r\n');
+  } else {
+    fs.writeFileSync(path.join(fakeBin, 'npx'), '#!/bin/sh\npwd > "$(dirname "$0")/ran-in.txt"\nexit 1\n');
+    fs.chmodSync(path.join(fakeBin, 'npx'), 0o755);
+  }
+  const project = path.join(box, 'a project');             // a project that lists GetFarman itself, where npx would pick the wrong copy
+  fs.mkdirSync(project);
+  fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({ name: 'getfarman', version: '0.0.1' }));
+  regMode = 'newer';
+  fs.rmSync(path.join(home, 'update.json'), { force: true });
+  r = await new Promise(resolve => {
+    const pathKey = Object.keys(env2).find(k => k.toUpperCase() === 'PATH') || 'PATH';
+    const e3 = Object.assign({}, env2, { [pathKey]: fakeBin + path.delimiter + env2[pathKey] });
+    const child = cp.spawn(process.execPath, [BIN, 'update'], { env: e3, cwd: project });
+    let out = '';
+    child.stdout.on('data', d => { out += d; });
+    child.stderr.on('data', d => { out += d; });
+    child.on('close', status => resolve({ status, out }));
+  });
+  assert.ok(r.status === 1 && r.out.includes('Running: npx --yes getfarman@9.9.9 setup --no-history') && r.out.includes('The update did not finish'), r.out);
+  const ranIn = fs.readFileSync(record, 'utf8').trim();
+  assert.strictEqual(path.resolve(ranIn).toLowerCase(), path.join(home, 'work', 'update').toLowerCase(), 'npx ran in ' + ranIn);
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(home, 'work', 'update', 'package.json'), 'utf8')).name, 'getfarman-update');
+  ok('getfarman update runs npx in a folder of its own, so a project nearby cannot hijack it');
+
   const server2 = cp.spawn(process.execPath, [BIN, 'serve', '--port', String(PORT + 2)], { env: env2, stdio: 'ignore' });
   let ov2 = null;
   for (let i = 0; i < 40 && !(ov2 && ov2.update.available); i++) {

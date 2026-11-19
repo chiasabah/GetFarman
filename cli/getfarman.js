@@ -14,7 +14,7 @@ const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
 const SELF = __filename;
-let VERSION = '0.1.5';
+let VERSION = '0.1.6';
 try { VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version || VERSION; } catch (e) { /* keep the default */ }
 const SCHEMA_VERSION = 3;
 
@@ -2113,7 +2113,14 @@ async function cmdUpdate(rest) {
   // The version comes from the registry, so it is checked to be three plain numbers before it goes into a command.
   const line = 'npx --yes getfarman@' + u.latest + ' setup --no-history';
   console.log('Running: ' + line);
-  const p = cp.spawnSync(line, { shell: true, stdio: 'inherit', env: Object.assign({}, process.env, { GETFARMAN_NO_UPDATE_CHECK: '1' }) });
+  // npx looks for a project in the folder it runs in. Inside a project that is GetFarman itself, or that lists it
+  // as a dependency, npx runs that copy instead of the version asked for, and nothing updates. So npx runs in a
+  // folder of our own, with a package.json of its own that names nothing.
+  const runDir = path.join(WORK, 'update');
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.writeFileSync(path.join(runDir, 'package.json'), JSON.stringify({ name: 'getfarman-update', version: '0.0.0', private: true }) + '\n');
+  const p = cp.spawnSync(line, { shell: true, stdio: 'inherit', cwd: runDir,
+    env: Object.assign({}, process.env, { GETFARMAN_NO_UPDATE_CHECK: '1' }) });
   const have = installedVersion();
   if (p.status !== 0 || have !== u.latest) {
     console.log('The update did not finish' + (have ? ', and the installed copy is still ' + have : '') + '. Run it yourself: ' + byHand);
