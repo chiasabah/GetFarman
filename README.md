@@ -39,8 +39,6 @@ The screenshots on this page show sample data.
   - [Settings](#settings)
   - [Dark theme](#dark-theme)
 - [Install](#install)
-  - [As a Claude Code plugin](#as-a-claude-code-plugin)
-  - [With npm](#with-npm)
 - [Updates](#updates)
 - [Commands](#commands)
 - [Privacy](#privacy)
@@ -180,21 +178,6 @@ The last button in the top bar switches between the light theme and the dark the
 
 GetFarman needs Node 22.13 or newer and Claude Code. It works on Windows, macOS and Linux. It uses no packages, only what Node ships with.
 
-There are two ways to install it. Use one of them, not both.
-
-### As a Claude Code plugin
-
-Run these two commands inside Claude Code.
-
-```text
-/plugin marketplace add chiasabah/GetFarman
-/plugin install getfarman@getfarman
-```
-
-The plugin adds the three hooks and four commands. Its updates come through Claude Code's plugin manager. Type `/getfarman:open` to open the page. To read the conversations that Claude Code already keeps, press "Read history again" in Settings.
-
-### With npm
-
 ```sh
 npx getfarman
 ```
@@ -227,12 +210,12 @@ To stop the daily look, run `getfarman config update_check off`.
 
 Type these in a Claude Code session. The hook answers them, so they never reach Claude.
 
-| With npm | As a plugin | What happens |
-|---|---|---|
-| `/getfarman` | `/getfarman:open` | Opens the page |
-| `/getfarman now` | `/getfarman:now` | Reviews the new prompts that wait in this session |
-| `/getfarman status` | `/getfarman:status` | Shows the mode, the counts and the last review |
-| `/getfarman on`, `hand` or `off` | `/getfarman:mode on`, `hand` or `off` | Sets the mode |
+| Command | What happens |
+|---|---|
+| `/getfarman` | Opens the page |
+| `/getfarman now` | Reviews the new prompts that wait in this session |
+| `/getfarman status` | Shows the mode, the counts and the last review |
+| `/getfarman on`, `hand` or `off` | Sets the mode |
 
 In a terminal, `getfarman open` opens the page, `getfarman model sonnet` changes the reviewer and `getfarman remove` uninstalls GetFarman.
 
@@ -245,7 +228,7 @@ Your prompts and the ends of Claude's replies are stored as plain text in `~/.ge
 | What | Details |
 |---|---|
 | Runs | Three Claude Code hooks run `node` with GetFarman's own script. A review starts the `claude` command in the background. The page starts a small web server on `127.0.0.1` |
-| Sends | During a review, the prompts under review go to Anthropic through your own `claude` login. The npm install also asks the npm registry for the latest version number once a day. The plugin never does |
+| Sends | During a review, the prompts under review go to Anthropic through your own `claude` login. Once a day GetFarman also asks the npm registry for the latest version number |
 | Stores | Everything stays in the `.getfarman` folder in your user folder |
 
 [PRIVACY.md](PRIVACY.md) gives the full detail.

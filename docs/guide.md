@@ -17,12 +17,6 @@ Nothing is ever written into your chat. GetFarman runs beside the session, not i
 
 GetFarman needs Node 22.13 or newer and Claude Code. It works on Windows, macOS and Linux. It uses no packages, only what Node ships with.
 
-GetFarman installs as a Claude Code plugin or with npm. Use one of the two. If both are installed, the hooks from settings.json do the logging and the plugin's hooks step aside.
-
-As a plugin, run `/plugin marketplace add chiasabah/GetFarman` and then `/plugin install getfarman@getfarman` inside Claude Code. The plugin's commands are `/getfarman:open`, `/getfarman:now`, `/getfarman:status` and `/getfarman:mode`. Its updates come through Claude Code's plugin manager, so it never asks npm for a new version. It keeps its log in the same `.getfarman` folder as the npm install.
-
-The rest of this section covers the npm install.
-
 ```sh
 npx getfarman
 ```
