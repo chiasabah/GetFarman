@@ -194,6 +194,39 @@ const ok = name => console.log('  ok   ' + (++step) + '. ' + name);
   server.kill();
   ok('the server stops when the page asks');
 
+  // one page server only: two opens at once, and an open in the gap while a server restarts after an update
+  const OPEN_PORT = PORT + 5;
+  assert.strictEqual(run(['config', 'port', String(OPEN_PORT)]).status, 0);
+  const openAsync = () => new Promise(resolve => {
+    const child = cp.spawn(process.execPath, [BIN, 'open', '--no-browser'], { env });
+    let out = '';
+    child.stdout.on('data', d => { out += d; });
+    child.stderr.on('data', d => { out += d; });
+    child.on('close', status => resolve({ status, out: out.trim() }));
+  });
+  const answers = p => new Promise(resolve => {
+    http.get('http://127.0.0.1:' + p + '/api/ping', res => { res.resume(); resolve(res.statusCode === 200); }).on('error', () => resolve(false));
+  });
+  const url = 'http://127.0.0.1:' + OPEN_PORT + '/';
+  let both = await Promise.all([openAsync(), openAsync()]);
+  assert.deepStrictEqual(both.map(x => x.out), [url, url], JSON.stringify(both));
+  assert.strictEqual(await answers(OPEN_PORT + 1), false, 'a second server started');
+  assert.ok(!fs.existsSync(path.join(home, 'server.starting')));
+  assert.strictEqual(run(['stop']).status, 0);
+  await sleep(500);
+
+  fs.writeFileSync(path.join(home, 'server.starting'), String(Date.now() / 1000));     // what a restarting server leaves behind
+  const pending = openAsync();
+  await sleep(1500);
+  const replacement = cp.spawn(process.execPath, [BIN, 'serve', '--port', String(OPEN_PORT), '--wait'], { env, stdio: 'ignore' });
+  const late = await pending;
+  assert.strictEqual(late.out, url, late.out);
+  assert.strictEqual(await answers(OPEN_PORT + 1), false, 'the open started its own server during the restart');
+  assert.strictEqual(run(['stop']).status, 0);
+  replacement.kill();
+  assert.strictEqual(run(['config', 'port', '4777']).status, 0);
+  ok('only one page server runs, even with two opens at once or an open during a restart');
+
   // the reviewer: a fake claude command records how it was called, so no real model is needed
   const fake = path.join(box, 'fake claude');          // a folder name with a space, as on many Windows installs
   fs.mkdirSync(fake);

@@ -14,7 +14,7 @@ const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
 const SELF = __filename;
-let VERSION = '0.1.6';
+let VERSION = '0.1.7';
 try { VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version || VERSION; } catch (e) { /* keep the default */ }
 const SCHEMA_VERSION = 3;
 
@@ -25,6 +25,7 @@ const CONFIG = path.join(HOME, 'config.json');
 const LOGFILE = path.join(HOME, 'getfarman.log');
 const TOKENFILE = path.join(HOME, 'token');
 const SERVERFILE = path.join(HOME, 'server.json');
+const STARTFILE = path.join(HOME, 'server.starting');      // a page server is on its way, so wait for it rather than start another
 const WORK = path.join(HOME, 'work');
 const PROMPTFILE = path.join(HOME, 'reviewer_prompt.txt');   // your own reviewer instructions, when you edit them
 const INSTALLED = path.join(HOME, 'app', 'bin', 'getfarman.js');
@@ -1759,11 +1760,13 @@ async function cmdServe(port, wait) {
     await sleep(250);
   }
   if (!bound) {
+    fs.rmSync(STARTFILE, { force: true });
     console.error('No free port between ' + want + ' and ' + (want + 19) + '.');
     return 1;
   }
   const at = server.address().port;
   fs.writeFileSync(SERVERFILE, JSON.stringify({ pid: process.pid, port: at, started: now() }));
+  fs.rmSync(STARTFILE, { force: true });        // this is the server that was on its way
   const made = fs.statSync(SELF).mtimeMs;
   let looking = false;
   const look = () => {       // at most one look at a time, and refreshUpdate itself waits a day between looks
@@ -1783,6 +1786,7 @@ async function cmdServe(port, wait) {
       const m = fs.statSync(SELF).mtimeMs;
       if (m !== made && Date.now() - m > 3000 && cp.spawnSync(process.execPath, ['--check', SELF], { windowsHide: true }).status === 0) {
         log("GetFarman was updated, so the page's server restarts");
+        fs.writeFileSync(STARTFILE, String(now()));     // an open in the gap waits for the new server instead of starting one
         spawnSelf(['serve', '--port', String(at), '--wait']);
         process.exit(0);
       }
@@ -1806,11 +1810,34 @@ function openBrowser(url) {
   } catch (e) { /* the address is printed anyway */ }
 }
 
+/** Claim the right to start the page's server. False when another process began starting one less than 15 seconds ago.
+
+    The claim is a file made with an exclusive create, so of two opens at the same moment only one starts a server. */
+function claimStart() {
+  try { fs.mkdirSync(HOME, { recursive: true, mode: 0o700 }); } catch (e) { /* the open below says why */ }
+  for (let i = 0; i < 2; i++) {
+    try {
+      const fd = fs.openSync(STARTFILE, 'wx');
+      fs.writeSync(fd, String(now()));
+      fs.closeSync(fd);
+      return true;
+    } catch (e) {
+      if (e.code !== 'EEXIST') return true;      // the claim cannot be made here, so start a server anyway
+      let at = 0;
+      try { at = parseFloat(fs.readFileSync(STARTFILE, 'utf8')) || 0; } catch (e2) { /* gone in the meantime */ }
+      if (now() - at >= 0 && now() - at < 15) return false;
+      fs.rmSync(STARTFILE, { force: true });     // a start that never finished: take it over
+    }
+  }
+  return true;
+}
+
 async function cmdOpen(browser) {
   let info = await serverInfo();
   if (!info) {
-    spawnSelf(['serve']);
-    for (let i = 0; i < 40 && !info; i++) {
+    // A server that is starting, or restarting after an update, gets up to 15 seconds before anyone starts another.
+    if (claimStart()) spawnSelf(['serve']);
+    for (let i = 0; i < 100 && !info; i++) {
       await sleep(150);
       info = await serverInfo();
     }
